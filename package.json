@@ -1,0 +1,32 @@
+{
+  "name": "tv-football-connectivity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.12.0" },
+  "scripts": {
+    "dev": "node --import tsx server/main.ts",
+    "build": "node scripts/build.mjs",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:protocol": "node --import tsx --test tests/protocol.test.ts",
+    "test:relay": "node --import tsx --test tests/relay.test.ts",
+    "test:controller": "node --import tsx --test tests/controller.test.ts",
+    "test:tv": "node --import tsx --test tests/tv.test.ts",
+    "typecheck": "tsc --noEmit",
+    "start": "node --import tsx server/main.ts",
+    "package:tv": "node scripts/package-tv.mjs"
+  },
+  "dependencies": {
+    "phaser": "3.90.0",
+    "qrcode": "1.5.4",
+    "tsx": "4.21.0",
+    "ws": "8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/qrcode": "1.5.6",
+    "@types/ws": "8.18.1",
+    "esbuild": "0.27.3",
+    "typescript": "5.9.3"
+  }
+}
