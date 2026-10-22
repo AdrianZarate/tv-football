@@ -4,13 +4,14 @@ import { neutralButtons, INPUT_LEASE_MS, type Buttons, type Slot } from '../shar
 export const FIELD = Object.freeze({
   width: 1280, height: 720, left: 64, right: 1216, top: 96, floor: 640, goalTop: 470,
 });
-export const PLAYER = Object.freeze({ halfWidth: 26, height: 100, speed: 300, jumpSpeed: 650 });
-export const BALL = Object.freeze({ radius: 18, restitution: 0.76, maxSpeed: 1400 });
+export const PLAYER = Object.freeze({ halfWidth: 26, height: 100, speed: 420, jumpSpeed: 780 });
+export const BALL = Object.freeze({ radius: 18, restitution: 0.55, maxSpeed: 1400 });
 export const MATCH_MS = 120000;
 export const DISCONNECT_MS = 60000;
 export const PHYSICS = Object.freeze({
   gravity: 1700, maxFrameSeconds: 0.1, substepSeconds: 1 / 120,
-  kickRange: 100, kickSpeed: 900, kickLift: 480, kickCooldownMs: 400,
+  kickRange: 100, kickSpeed: 900, kickLift: 400, kickCooldownMs: 400,
+  rollingDrag: 1.8, rollStopSpeed: 2, bounceStopSpeed: 35,
 });
 
 export type MatchPhase = 'lobby' | 'playing' | 'paused' | 'finished' | 'cancelled';
@@ -222,13 +223,21 @@ export class FootballMatch {
       }
       control.kick = false;
     }
-    this.ball.vy = clamp(this.ball.vy + PHYSICS.gravity * delta, -BALL.maxSpeed, BALL.maxSpeed);
-    this.ball.vx = clamp(this.ball.vx, -BALL.maxSpeed, BALL.maxSpeed);
-    this.ball.x += this.ball.vx * delta;
+    const rolling = this.ball.y === FIELD.floor - BALL.radius && this.ball.vy === 0;
+    this.ball.vy += PHYSICS.gravity * delta;
+    this.limitBallSpeed();
+    if (rolling) {
+      // Integrate exponential ground drag exactly, once, independent of contact/frame count.
+      const damping = Math.exp(-PHYSICS.rollingDrag * delta);
+      this.ball.x += this.ball.vx * (1 - damping) / PHYSICS.rollingDrag;
+      this.ball.vx *= damping;
+      if (Math.abs(this.ball.vx) < PHYSICS.rollStopSpeed) this.ball.vx = 0;
+    } else this.ball.x += this.ball.vx * delta;
     this.ball.y += this.ball.vy * delta;
     this.boundBallVertically();
     for (const player of this.players) this.collideBallPlayer(player);
     this.boundBallVertically();
+    this.limitBallSpeed();
     const inMouth = this.ball.y - BALL.radius >= FIELD.goalTop && this.ball.y + BALL.radius <= FIELD.floor;
     if (inMouth) {
       if (this.ball.x + BALL.radius < FIELD.left) return this.goal(2);
@@ -284,6 +293,14 @@ export class FootballMatch {
     }
   }
 
+  private limitBallSpeed(): void {
+    const speed = Math.hypot(this.ball.vx, this.ball.vy);
+    if (speed > BALL.maxSpeed) {
+      this.ball.vx *= BALL.maxSpeed / speed;
+      this.ball.vy *= BALL.maxSpeed / speed;
+    }
+  }
+
   private boundBallVertically(): void {
     if (this.ball.y < FIELD.top + BALL.radius) {
       this.ball.y = FIELD.top + BALL.radius;
@@ -291,9 +308,9 @@ export class FootballMatch {
     }
     if (this.ball.y >= FIELD.floor - BALL.radius) {
       this.ball.y = FIELD.floor - BALL.radius;
-      this.ball.vy = -Math.abs(this.ball.vy) * BALL.restitution;
-      if (Math.abs(this.ball.vy) < 35) this.ball.vy = 0;
-      this.ball.vx *= 0.985;
+      // A second positional correction must not bounce an already separating ball again.
+      if (this.ball.vy > 0) this.ball.vy = -this.ball.vy * BALL.restitution;
+      if (Math.abs(this.ball.vy) < PHYSICS.bounceStopSpeed) this.ball.vy = 0;
     }
   }
 

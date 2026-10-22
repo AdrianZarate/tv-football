@@ -177,7 +177,7 @@ test('disconnect settles the active half-second before freezing; both confirmati
     h.receive({ type: 'input', slot: 1, sequence: 0, buttons: { ...neutralButtons(), right: true } });
     h.setNow(3010); h.host.update(1.41); // Most of this stale frame was paused.
     assert.equal(h.host.snapshot().remainingMs, 118490);
-    assert.equal(h.host.snapshot().players[0].x, paused.players[0].x + 3);
+    assert.ok(Math.abs(h.host.snapshot().players[0].x - (paused.players[0].x + 4.2)) < 1e-9);
     const resumed = h.host.snapshot();
     h.host.update(100); // The same wall-clock interval cannot be counted twice.
     assert.deepEqual(h.host.snapshot(), resumed);

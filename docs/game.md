@@ -15,6 +15,21 @@ Un gol cuenta solo cuando toda la pelota cruza el límite lateral dentro de la b
 
 La desconexión de un teléfono pausa inmediatamente la física y el reloj, y borra los controles y las confirmaciones de ambos jugadores. El teléfono ausente tiene 60 segundos para volver. Cuando están ambos, se retira el plazo, pero **ambos deben pulsar Confirmar reanudación**. Otra desconexión mientras se espera confirmación inicia un nuevo plazo de 60 segundos; reconexiones parciales durante una ausencia en curso nunca lo extienden. Al vencer, la cancelación es definitiva y no hay ganador, aunque uno vaya adelante. Creá una Nueva sala después de cancelar. Una desconexión en la espera inicial no inicia una partida ni un plazo de cancelación.
 
+## Física ágil y controlable
+
+Los valores usan píxeles lógicos y segundos, no dependen de la resolución del televisor:
+
+| Parámetro | Valor elegido y compromiso |
+|---|---|
+| Movimiento | 420 px/s (antes 300); 210 px en medio segundo, con parada inmediata al soltar. |
+| Salto | Impulso de 780 px/s (antes 650), gravedad de 1700 px/s² sin cambios; altura aproximada de 176 px y vuelo de 0,92 s. Permite alcanzar mejor pelotas elevadas, sin doble salto ni repetición automática. |
+| Rebote | Restitución de 0,55 (antes 0,76) en superficies y jugadores; menor rebote evita trayectorias excesivas. Un contacto ya separado no vuelve a aplicar restitución. |
+| Rodadura | Arrastre exponencial de 1,8 s⁻¹ integrado por tiempo, no por cantidad de cuadros/contactos. Una pelota libre a 300 px/s conserva unos 49,59 px/s tras un segundo y avanza unos 139,12 px. Bajo 2 px/s se detiene; rebotes verticales menores de 35 px/s se asientan. |
+| Patada | Velocidad horizontal fija de 900 px/s, impulso vertical de 400 px/s (antes 480), alcance de 100 px y espera de 400 ms sin cambios. Sustituye la velocidad entrante para un arco consistente y más bajo en ambas direcciones. |
+| Seguridad | Velocidad total de pelota limitada a 1400 px/s antes de integrar y después de contactos; física en subpasos de hasta 1/120 s y límite de 100 ms por cuadro, sin recortar el reloj. |
+
+Se priorizan precisión, rodadura predecible y rebotes moderados; no se agregan ajustes ni poderes. Que resulte **divertido necesita comentarios de usuarios reales**: una prueba unitaria demuestra resultados deterministas, no diversión ni respuesta física del dispositivo.
+
 ## API de integración con la TV
 
 `game/model.ts` importa solo `Buttons`, `Slot`, `neutralButtons` e `INPUT_LEASE_MS` del protocolo compartido. No depende de Phaser, DOM, transporte, aleatoriedad ni temporizadores de tiempo real.
