@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>TV Football — Controller probe</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./main.js" defer></script>
+</head>
+<body>
+  <header><h1>TV Football · Connectivity probe</h1><p id="status" role="status">Enter the code shown on the TV.</p></header>
+  <form id="join-form">
+    <label for="room">Room code</label>
+    <input id="room" name="room" maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
+    <button id="join" type="submit">Join room</button>
+  </form>
+  <section id="controls" aria-label="Player controls">
+    <div class="movement"><button data-control="left" disabled>← Left</button><button data-control="right" disabled>Right →</button></div>
+    <div class="actions"><button data-control="jump" disabled>Jump</button><button data-control="kick" disabled>Kick</button></div>
+  </section>
+  <details open><summary>Connection measurements</summary>
+    <p>Phone ↔ relay: <span id="relay-rtt">Waiting</span></p>
+    <p>Phone ↔ TV, via relay: <span id="tv-rtt">Waiting</span></p>
+    <p>Application round trips only. These are NOT button-to-screen latency measurements. TV replies before drawing. Rolling window: 120 samples.</p>
+  </details>
+  <p class="hint">Use multiple fingers: hold movement while tapping Jump or Kick. If a device disconnects, create a new room on the TV; this prototype does not reconnect players.</p>
+</body>
+</html>

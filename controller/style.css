@@ -1,0 +1,16 @@
+:root { color-scheme: dark; font: 16px system-ui, sans-serif; background: #101827; color: #f0f5ff; }
+* { box-sizing: border-box; }
+body { max-width: 960px; margin: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+h1 { font-size: 1.2rem; }
+form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+input { font: 1.3rem monospace; width: 10ch; text-transform: uppercase; padding: 10px; }
+button { border: 2px solid #9bb5dc; border-radius: 14px; background: #244168; color: white; font: bold 1.1rem system-ui, sans-serif; min-height: 52px; padding: 10px 20px; }
+button:disabled { opacity: 0.45; }
+button:focus-visible { outline: 3px solid #ffe172; }
+#controls { display: flex; justify-content: space-between; gap: 12px; margin: 20px 0; }
+#controls > div { display: flex; gap: 10px; flex: 1; }
+#controls button { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; flex: 1; min-height: 140px; padding: 10px; }
+#controls button[data-held="true"] { background: #527f36; }
+details, .hint { font-size: 0.85rem; line-height: 1.5; }
+@media (max-width: 540px) { #controls { flex-direction: column; } #controls button { min-height: 100px; } }
+@media (orientation: landscape) and (max-height: 500px) { h1 { margin: 0; } #controls { margin: 8px 0; } #controls button { min-height: 110px; } details { font-size: 0.75rem; } }
