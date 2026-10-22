@@ -1,6 +1,7 @@
 import { InputTracker } from './input.js';
 import { RoomCredentials, RetryWindow } from './session.js';
-import { RttWindow, formatRtt } from '../shared/metrics.js';
+import { RttWindow } from '../shared/metrics.js';
+import { errorMessage, endedMessage, phaseLabel, formatRttSpanish } from '../shared/messages.js';
 import { parseServerMessage, ROOM_CODE_PATTERN, type Buttons, type ClientMessage, type GameStatus, type Slot } from '../shared/protocol.js';
 
 const form = document.querySelector<HTMLFormElement>('#join-form')!;
@@ -12,7 +13,7 @@ const gameDisplay = document.querySelector<HTMLElement>('#game-status')!;
 const storageStatus = document.querySelector<HTMLElement>('#storage-status')!;
 const controls = [...document.querySelectorAll<HTMLButtonElement>('[data-control]')];
 const credentials = new RoomCredentials(() => window.sessionStorage, () => {
-  storageStatus.textContent = 'Session storage is unavailable. Recovery works only while this page stays open; reload recovery is not available.';
+  storageStatus.textContent = 'El almacenamiento de sesión no está disponible. Podés volver a conectar solo mientras esta página siga abierta; no se podrá recuperar al recargarla.';
 });
 const retry = new RetryWindow();
 let socket: WebSocket | undefined;
@@ -51,8 +52,8 @@ function updateReady() {
   readyButton.hidden = !game;
   readyButton.disabled = !game || mode !== 'connected' || !slot || hidden()
     || latestStatus?.phase === 'playing' || latestStatus?.phase === 'cancelled';
-  readyButton.textContent = latestStatus?.phase === 'finished' ? 'Ready for rematch'
-    : latestStatus?.phase === 'paused' ? 'Confirm resume' : 'Ready to play';
+  readyButton.textContent = latestStatus?.phase === 'finished' ? 'Listo para la revancha'
+    : latestStatus?.phase === 'paused' ? 'Confirmar reanudación' : 'Listo para jugar';
 }
 function disable() {
   input.reset(); slot = undefined;
@@ -65,7 +66,7 @@ function enable() {
   clearTimeout(connectTimer); connectTimer = undefined;
   for (const button of controls) button.disabled = hidden();
   updateReady();
-  setStatus(`Player ${slot} connected. ${game ? 'Confirm readiness on both phones.' : 'Wait for both players on the TV.'}`);
+  setStatus(`Jugador ${slot} conectado. ${game ? 'Confirmen que están listos en ambos teléfonos.' : 'Esperá a los dos jugadores en la TV.'}`);
   input.reset();
   if (game && hidden()) background();
 }
@@ -76,11 +77,11 @@ function stop(message: string, clearSaved = false) {
 }
 function recover() {
   clearRetryTimer();
-  if (!game || !key || !roomCode) { stop('Disconnected. Ask the TV to create a new probe room. Slots are not reassigned.'); return; }
+  if (!game || !key || !roomCode) { stop('Se perdió la conexión. Pedí una nueva sala de prueba en la TV. Los lugares no se reasignan.'); return; }
   mode = 'recovering'; retry.begin(performance.now());
-  if (retry.expired(performance.now())) { stop('Recovery timed out after 60 seconds. Check the TV; no player slot was reassigned.'); return; }
+  if (retry.expired(performance.now())) { stop('Se agotaron los 60 segundos para volver. Revisá la TV; no se reasignó ningún lugar.'); return; }
   updateReady();
-  setStatus(hidden() ? 'Game paused while this phone is in the background.' : 'Reconnecting the original player… Controls are disabled.');
+  setStatus(hidden() ? 'Partida en pausa mientras este teléfono está en segundo plano.' : 'Volviendo a conectar al jugador original… Los controles están desactivados.');
   const delay = retry.delay(performance.now(), hidden());
   if (delay !== undefined) retryTimer = setTimeout(() => {
     retryTimer = undefined;
@@ -99,7 +100,7 @@ function openConnection(resuming: boolean) {
   connectTimer = setTimeout(() => {
     if (socket !== ws) return;
     disable(); detach();
-    if (game && key) recover(); else stop('Connection timed out. Check HTTPS/WSS and the room code.');
+    if (game && key) recover(); else stop('Se agotó el tiempo de conexión. Revisá HTTPS/WSS y el código de sala.');
   }, 5000);
   ws.addEventListener('open', () => {
     if (socket !== ws) return;
@@ -109,16 +110,16 @@ function openConnection(resuming: boolean) {
   ws.addEventListener('message', event => {
     if (socket !== ws || typeof event.data !== 'string') return;
     const message = parseServerMessage(event.data);
-    if (!message) { stop('Invalid server message. Check the room on the TV.'); return; }
+    if (!message) { stop('Mensaje del servidor no válido. Revisá la sala en la TV.'); return; }
     switch (message.type) {
       case 'joined':
-        if (joined) { stop('Unexpected player assignment. Check the TV.'); return; }
+        if (joined) { stop('Asignación de jugador inesperada. Revisá la TV.'); return; }
         joined = true; slot = message.slot;
         // A resumed connection stays disabled until its rotated credential is persisted.
         if (!resuming) enable();
         break;
       case 'resumeKey':
-        if (!joined) { stop('Unexpected recovery credential. Check the TV.'); return; }
+        if (!joined) { stop('Clave de recuperación inesperada. Revisá la TV.'); return; }
         game = true; key = message.key;
         credentials.save(code, key); // Volatile fallback is set before any future reconnect.
         enable();
@@ -126,7 +127,7 @@ function openConnection(resuming: boolean) {
       case 'gameStatus': {
         latestStatus = message;
         const seconds = Math.ceil(message.remainingMs / 1000);
-        gameDisplay.textContent = `${message.score[0]} – ${message.score[1]} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · ${message.phase}`;
+        gameDisplay.textContent = `${message.score[0]} – ${message.score[1]} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · ${phaseLabel(message.phase)}`;
         updateReady(); // Render TV values only: no local clock or score prediction.
         break;
       }
@@ -137,16 +138,16 @@ function openConnection(resuming: boolean) {
           disable(); detach(); recover();
         } else {
           const invalidCredential = ['resume_invalid', 'room_unavailable'].includes(message.code);
-          stop(`Cannot continue: ${message.code}. Check the room on the TV.`, invalidCredential);
+          stop(errorMessage(message.code), invalidCredential);
         }
         break;
-      case 'ended': stop(`Room ended: ${message.reason}. Enter a new TV room code.`, true); break;
+      case 'ended': stop(endedMessage(message.reason), true); break;
     }
   });
   ws.addEventListener('close', () => {
     if (socket !== ws) return;
     disable(); detach();
-    if (game && key) recover(); else stop('Disconnected. Ask the TV to create a new probe room. Slots are not reassigned.');
+    if (game && key) recover(); else stop('Se perdió la conexión. Pedí una nueva sala de prueba en la TV. Los lugares no se reasignan.');
   });
   // close owns recovery; error must never leave controls held or create a second retry.
   ws.addEventListener('error', () => {
@@ -184,7 +185,7 @@ for (const button of controls) {
 readyButton.addEventListener('click', () => {
   if (!readyButton.disabled && slot && game && mode === 'connected' && !hidden()) {
     input.reset();
-    if (send({ type: 'ready' })) setStatus(`Player ${slot} ready. Waiting for the TV and the other player.`);
+    if (send({ type: 'ready' })) setStatus(`Jugador ${slot} listo. Esperando a la TV y al otro jugador.`);
   }
 });
 window.addEventListener('blur', () => input.reset());
@@ -197,9 +198,9 @@ if (queryCode && ROOM_CODE_PATTERN.test(queryCode.toUpperCase())) roomInput.valu
 form.addEventListener('submit', event => {
   event.preventDefault();
   const code = roomInput.value.trim().toUpperCase();
-  if (!ROOM_CODE_PATTERN.test(code)) { setStatus('Enter the 8-character room code shown on the TV.'); return; }
+  if (!ROOM_CODE_PATTERN.test(code)) { setStatus('Ingresá el código de sala de 8 caracteres que aparece en la TV.'); return; }
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-  if (location.protocol !== 'https:' && !local) { setStatus('HTTPS is required. Do not use an insecure network address.'); return; }
+  if (location.protocol !== 'https:' && !local) { setStatus('Se requiere HTTPS. No uses una dirección de red insegura.'); return; }
   disable(); clearRetryTimer(); detach(); retry.reset();
   storageStatus.textContent = '';
   roomCode = code; key = credentials.load(code); game = Boolean(key); latestStatus = undefined;
@@ -207,7 +208,7 @@ form.addEventListener('submit', event => {
   relayRtt = new RttWindow(); tvRtt = new RttWindow();
   mode = key ? 'recovering' : 'connecting'; joinButton.disabled = true;
   if (key) retry.begin(performance.now());
-  setStatus(key ? 'Recovering the original player…' : 'Connecting…');
+  setStatus(key ? 'Recuperando al jugador original…' : 'Conectando…');
   openConnection(Boolean(key));
 });
 // QR/reload recovery is automatic only when this exact room has a session credential.
@@ -220,7 +221,7 @@ setInterval(() => {
 setInterval(() => {
   const now = performance.now();
   if (mode === 'recovering' && retry.expired(now)) {
-    stop('Recovery timed out after 60 seconds. Check the TV; no player slot was reassigned.');
+    stop('Se agotaron los 60 segundos para volver. Revisá la TV; no se reasignó ningún lugar.');
   }
   relayRtt.expire(now); tvRtt.expire(now);
   if (slot && mode === 'connected' && !hidden()) {
@@ -228,6 +229,6 @@ setInterval(() => {
     if (relayRtt.begin(id, now)) send({ type: 'ping', id });
     if (tvRtt.begin(id, now)) send({ type: 'probe', id });
   }
-  document.querySelector('#relay-rtt')!.textContent = formatRtt(relayRtt);
-  document.querySelector('#tv-rtt')!.textContent = formatRtt(tvRtt);
+  document.querySelector('#relay-rtt')!.textContent = formatRttSpanish(relayRtt);
+  document.querySelector('#tv-rtt')!.textContent = formatRttSpanish(tvRtt);
 }, 1000);

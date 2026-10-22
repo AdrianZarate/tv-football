@@ -4,7 +4,8 @@ import { GameScene } from '../game/scene.js';
 import { FIELD } from '../game/model.js';
 import { FootballHost, describeMatch, formatClock } from './host.js';
 import { type ClientMessage } from '../shared/protocol.js';
-import { RttWindow, formatRtt } from '../shared/metrics.js';
+import { RttWindow } from '../shared/metrics.js';
+import { errorMessage, endedMessage, formatRttSpanish } from '../shared/messages.js';
 
 declare const __PUBLIC_ORIGIN__: string;
 const publicOrigin = __PUBLIC_ORIGIN__;
@@ -21,15 +22,19 @@ let diagnosticId = 0;
 let relayRtt = new RttWindow();
 let lastMessage = 0;
 let code = '';
+// Initial visibility is not room loss. Only a created response completes first launch.
+let initialRoomPending = true;
+let pageHidden = false;
+const hidden = () => document.hidden || pageHidden;
 const frameIntervals: number[] = [];
 const host = new FootballHost(send, () => performance.now());
 document.querySelector('#controller-url')!.textContent = publicOrigin;
-document.querySelector('#endpoint')!.textContent = `Relay: ${relayUrl} · TV room recovery is not supported`;
+document.querySelector('#endpoint')!.textContent = `Servidor de enlace: ${relayUrl} · La TV no recupera partidas terminadas`;
 
 function send(message: ClientMessage) {
   if (socket?.readyState !== WebSocket.OPEN) return;
   if (socket.bufferedAmount > 16 * 1024) {
-    stop('Relay connection is too slow. New room needed.');
+    stop('La conexión con el servidor es demasiado lenta. Seleccioná Nueva sala.');
     return;
   }
   socket.send(JSON.stringify(message));
@@ -40,7 +45,7 @@ function text(element: HTMLElement, value: string) {
 function renderStatus() {
   const state = host.snapshot();
   text(clock, formatClock(state.remainingMs));
-  text(players, state.connected.map((present, i) => `P${i + 1} ${!present ? 'offline' : state.ready[i] ? 'ready' : 'connected'}`).join(' · '));
+  text(players, state.connected.map((present, i) => `P${i + 1} ${!present ? 'sin conexión' : state.ready[i] ? 'listo' : 'conectado'}`).join(' · '));
   if (code) text(status, describeMatch(state, performance.now()));
   // Collapse only once play begins. The full logical pitch is always visible, never cropped.
   document.body.dataset.phase = state.phase;
@@ -55,8 +60,8 @@ function stop(message: string) {
   old?.close(); // Graceful owner close tells the relay to end all old controllers.
 }
 function newRoom() {
-  stop('Connecting to game relay…');
-  if (document.hidden) { status.textContent = 'Return to the TV app, then select New room.'; return; }
+  stop('Conectando con el servidor de juego…');
+  if (hidden()) { status.textContent = 'Volvé a la aplicación de TV para conectar. Si la sala terminó, seleccioná Nueva sala.'; return; }
   const current = generation = host.newRoom();
   relayRtt = new RttWindow(); frameIntervals.length = 0;
   renderStatus();
@@ -72,11 +77,12 @@ function newRoom() {
     if (!ownsRoom() || typeof event.data !== 'string') return;
     // Host parses through the shared validator and replies to probes before UI/render work.
     const message = host.receive(event.data, current);
-    if (!message) { stop('Invalid relay message. New room needed.'); return; }
+    if (!message) { stop('Mensaje del servidor no válido. Seleccioná Nueva sala.'); return; }
     if (!ownsRoom()) return;
     lastMessage = performance.now();
     switch (message.type) {
       case 'created': {
+        initialRoomPending = false;
         code = message.code; roomLabel.textContent = code;
         const roomCode = code;
         void QRCode.toDataURL(`${publicOrigin}/?room=${code}`, { width: 224, margin: 2, errorCorrectionLevel: 'M' }).then(url => {
@@ -84,22 +90,22 @@ function newRoom() {
           qr.src = url; qr.style.visibility = 'visible';
         }).catch(() => {
           if (!ownsRoom() || code !== roomCode) return;
-          document.querySelector('#join-help')!.textContent = 'QR unavailable. Open the URL and enter the room code.';
+          document.querySelector('#join-help')!.textContent = 'QR no disponible. Abrí la dirección e ingresá el código de sala.';
         });
-        document.querySelector('#join-help')!.textContent = 'Scan on each phone, or open the URL and enter the room code.';
+        document.querySelector('#join-help')!.textContent = 'Escaneá con cada teléfono, o abrí la dirección e ingresá el código de sala.';
         break;
       }
       case 'pong': relayRtt.acknowledge(message.id, performance.now()); break;
-      case 'error': stop(`Relay error: ${message.code}. New room needed.`); return;
-      case 'ended': stop(`Room ended: ${message.reason}. New room needed.`); return;
+      case 'error': stop(`${errorMessage(message.code)} Seleccioná Nueva sala.`); return;
+      case 'ended': stop(endedMessage(message.reason)); return;
     }
     renderStatus();
   });
   ws.addEventListener('error', () => {
-    if (ownsRoom()) stop('WSS connection failed. Check HTTPS and relay settings; then select New room.');
+    if (ownsRoom()) stop('Falló la conexión WSS. Revisá HTTPS y la configuración del servidor; después seleccioná Nueva sala.');
   });
   ws.addEventListener('close', () => {
-    if (ownsRoom()) stop('TV disconnected. Restore the connection, then select New room. No match recovery.');
+    if (ownsRoom()) stop('La TV se desconectó. Restablecé la conexión y seleccioná Nueva sala. La partida anterior terminó.');
   });
 }
 
@@ -112,7 +118,7 @@ class HostedGameScene extends GameScene {
     const now = performance.now();
     const delta = now - this.lastUpdate;
     this.lastUpdate = now;
-    if (delta > 0 && delta < 2000 && !document.hidden) {
+    if (delta > 0 && delta < 2000 && !hidden()) {
       frameIntervals.push(delta); if (frameIntervals.length > 120) frameIntervals.shift();
     }
     host.update(delta / 1000);
@@ -128,23 +134,31 @@ new Phaser.Game({
 });
 button.addEventListener('click', newRoom); button.focus();
 // TV loss ends the room; only phones can resume an existing player session.
-window.addEventListener('pagehide', () => stop('TV app closed. Select New room when returning.'));
+function foreground() {
+  if (!hidden() && initialRoomPending && !socket) newRoom();
+}
+window.addEventListener('pagehide', () => {
+  pageHidden = true;
+  stop('La aplicación de TV se cerró. Al volver, seleccioná Nueva sala.');
+});
+window.addEventListener('pageshow', () => { pageHidden = false; foreground(); });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) stop('TV app backgrounded. Select New room when returning; the previous match ended.');
+  if (document.hidden) stop('La aplicación de TV pasó a segundo plano. La partida terminó; al volver, seleccioná Nueva sala.');
+  else foreground();
 });
 setInterval(() => {
   const now = performance.now(); relayRtt.expire(now);
-  if (socket && !document.hidden) {
-    if (now - lastMessage > 6000) stop('Relay stopped responding. Check the network, then select New room.');
+  if (socket && !hidden()) {
+    if (now - lastMessage > 6000) stop('El servidor dejó de responder. Revisá la red y seleccioná Nueva sala.');
     else if (socket.readyState === WebSocket.OPEN) {
       const id = ++diagnosticId;
       if (relayRtt.begin(id, now)) send({ type: 'ping', id });
     }
   }
-  text(document.querySelector<HTMLElement>('#relay-rtt')!, `TV ↔ relay application RTT: ${formatRtt(relayRtt)}`);
+  text(document.querySelector<HTMLElement>('#relay-rtt')!, `RTT de aplicación TV ↔ servidor: ${formatRttSpanish(relayRtt)}`);
   const sorted = [...frameIntervals].sort((a, b) => a - b);
   const p50 = sorted[Math.max(0, Math.ceil(sorted.length * 0.5) - 1)];
   const p95 = sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)];
-  text(document.querySelector<HTMLElement>('#rendering')!, p50 === undefined ? 'Rendering interval: waiting' : `Observed scene update interval (not display latency): p50 ${p50.toFixed(1)} ms | p95 ${p95!.toFixed(1)} ms | n=${sorted.length}`);
+  text(document.querySelector<HTMLElement>('#rendering')!, p50 === undefined ? 'Intervalo de dibujo: esperando muestras' : `Intervalo observado entre actualizaciones (no es latencia de pantalla): p50 ${p50.toFixed(1)} ms | p95 ${p95!.toFixed(1)} ms | muestras=${sorted.length}`);
 }, 1000);
 newRoom();

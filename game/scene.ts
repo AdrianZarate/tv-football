@@ -68,7 +68,7 @@ export class GameScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x36566e, 0.4).lineBetween(FIELD.left, FIELD.top, FIELD.right, FIELD.top);
     this.drawGoal(graphics, FIELD.left - 48, FIELD.left, COLORS[0]);
     this.drawGoal(graphics, FIELD.right, FIELD.right + 48, COLORS[1]);
-    this.add.text(28, 26, 'POCKET PITCH', {
+    this.add.text(28, 26, 'CANCHA DE BOLSILLO', {
       fontFamily: FONT, fontSize: '25px', color: '#bdebea', fontStyle: 'bold',
     });
   }
@@ -90,18 +90,18 @@ export class GameScene extends Phaser.Scene {
     const seconds = Math.ceil(state.remainingMs / 1000);
     this.clockLabel.setText(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
     const messages: Record<MatchSnapshot['phase'], string> = {
-      lobby: 'Connect two phones, then both press Ready',
+      lobby: 'Conectá dos teléfonos; ambos deben pulsar Listo para jugar',
       playing: '',
       paused: state.disconnectDeadlineMs === null
-        ? 'PAUSED — both players must press Ready to resume'
-        : 'PAUSED — reconnect missing phones within 60 seconds',
-      finished: state.winner === null ? 'DRAW — both press Ready for a rematch' : `P${state.winner} WINS — both press Ready for a rematch`,
-      cancelled: 'MATCH CANCELLED — no winner. Create a new room.',
+        ? 'PAUSA — ambos deben confirmar para reanudar'
+        : 'PAUSA — volvé a conectar los teléfonos antes de 60 segundos',
+      finished: state.winner === null ? 'EMPATE — ambos deben confirmar la revancha' : `GANA P${state.winner} — ambos deben confirmar la revancha`,
+      cancelled: 'PARTIDO CANCELADO — sin ganador. Creá una Nueva sala.',
     };
     this.statusLabel.setText(messages[state.phase]).setVisible(state.phase !== 'playing');
     this.readyLabel.setText(state.phase === 'playing'
-      ? 'P1 BLUE  ·  Move + Jump + Kick  ·  P2 ORANGE'
-      : state.players.map((player, index) => `P${player.slot}: ${!state.connected[index] ? 'disconnected' : state.ready[index] ? 'ready' : 'waiting'}`).join('     |     '));
+      ? 'P1 AZUL  ·  Mover + Saltar + Patear  ·  P2 NARANJA'
+      : state.players.map((player, index) => `P${player.slot}: ${!state.connected[index] ? 'sin conexión' : state.ready[index] ? 'listo' : 'esperando'}`).join('     |     '));
   }
 
   private drawPlayer(player: PlayerSnapshot): void {

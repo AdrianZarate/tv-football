@@ -59,7 +59,7 @@ test('TV adapter broadcasts a real goal immediately, preserves winner and clears
   now += 119990; host.update(119.99);
   assert.deepEqual(lastSent(sent), { type: 'gameStatus', phase: 'finished', score: [1, 0], remainingMs: 0 });
   assert.equal(host.snapshot().winner, 1);
-  assert.match(describeMatch(host.snapshot(), now), /P1 WINS/);
+  assert.match(describeMatch(host.snapshot(), now), /GANA P1/);
   host.receive(raw({ type: 'ready', slot: 1 }), generation);
   assert.equal(host.snapshot().phase, 'finished');
   host.receive(raw({ type: 'ready', slot: 2 }), generation);
@@ -122,7 +122,7 @@ test('finished draw, both-confirmed rematch and stale-frame clock boundary use T
   const h = harness(); h.start(); h.tick(120000);
   assert.deepEqual(lastSent(h.sent), { type: 'gameStatus', phase: 'finished', score: [0, 0], remainingMs: 0 });
   assert.equal(h.host.snapshot().winner, null);
-  assert.match(describeMatch(h.host.snapshot(), 120000), /DRAW/);
+  assert.match(describeMatch(h.host.snapshot(), 120000), /EMPATE/);
   h.receive({ type: 'ready', slot: 1 });
   assert.deepEqual(h.host.snapshot().ready, [true, false]);
   h.receive({ type: 'ready', slot: 2 });
@@ -140,14 +140,14 @@ test('TV text shows ceil clock, readiness, pause deadline and terminal result ac
   assert.deepEqual([120000, 119001, 1000, 1, 0].map(formatClock), ['02:00', '02:00', '00:01', '00:01', '00:00']);
   const h = harness();
   h.receive({ type: 'state', connected: [true, true] }); h.receive({ type: 'ready', slot: 1 });
-  assert.match(describeMatch(h.host.snapshot(), 0), /P1 ready.*P2 waiting/);
+  assert.match(describeMatch(h.host.snapshot(), 0), /P1 listo.*P2 esperando/);
   h.receive({ type: 'ready', slot: 2 }); h.receive({ type: 'state', connected: [false, true] });
-  assert.match(describeMatch(h.host.snapshot(), 1), /60s/);
-  assert.match(describeMatch(h.host.snapshot(), 59001), /1s/);
+  assert.match(describeMatch(h.host.snapshot(), 1), /60 s/);
+  assert.match(describeMatch(h.host.snapshot(), 59001), /1 s/);
   h.receive({ type: 'state', connected: [true, true] });
-  assert.match(describeMatch(h.host.snapshot(), 59001), /both.*Ready/);
+  assert.match(describeMatch(h.host.snapshot(), 59001), /ambos.*Confirmar reanudación/);
   h.host.endRoom(h.generation);
-  assert.match(describeMatch(h.host.snapshot(), 60000), /no winner.*New room/i);
+  assert.match(describeMatch(h.host.snapshot(), 60000), /sin ganador.*Nueva sala/i);
 });
 
 test('disconnect settles the active half-second before freezing; both confirmations resume from a fresh anchor', () => {

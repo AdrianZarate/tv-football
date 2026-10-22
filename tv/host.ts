@@ -7,15 +7,15 @@ export function formatClock(remainingMs: number): string {
 }
 
 export function describeMatch(state: MatchSnapshot, nowMs: number): string {
-  const readiness = state.connected.map((present, i) => `P${i + 1} ${!present ? 'disconnected' : state.ready[i] ? 'ready' : 'waiting'}`).join(' · ');
+  const readiness = state.connected.map((present, i) => `P${i + 1} ${!present ? 'sin conexión' : state.ready[i] ? 'listo' : 'esperando'}`).join(' · ');
   switch (state.phase) {
-    case 'lobby': return `Connect two phones; both press Ready. ${readiness}`;
-    case 'playing': return 'P1 blue attacks right · P2 orange attacks left';
+    case 'lobby': return `Conectá dos teléfonos; ambos deben pulsar Listo para jugar. ${readiness}`;
+    case 'playing': return 'P1 azul ataca a la derecha · P2 naranja ataca a la izquierda';
     case 'paused': return state.disconnectDeadlineMs === null
-      ? `PAUSED — both press Ready to resume. ${readiness}`
-      : `PAUSED — ${Math.max(0, Math.ceil((state.disconnectDeadlineMs - nowMs) / 1000))}s to reconnect the original phone/browser. ${readiness}`;
-    case 'finished': return `${state.winner === null ? 'DRAW' : `P${state.winner} WINS`} — both press Ready for rematch. ${readiness}`;
-    case 'cancelled': return 'MATCH CANCELLED — no winner. New room needed.';
+      ? `PAUSA — ambos deben pulsar Confirmar reanudación para seguir. ${readiness}`
+      : `PAUSA — quedan ${Math.max(0, Math.ceil((state.disconnectDeadlineMs - nowMs) / 1000))} s para volver con el teléfono y navegador originales. ${readiness}`;
+    case 'finished': return `${state.winner === null ? 'EMPATE' : `GANA P${state.winner}`} — ambos deben confirmar para la revancha. ${readiness}`;
+    case 'cancelled': return 'PARTIDO CANCELADO — sin ganador. Seleccioná Nueva sala.';
   }
 }
 
