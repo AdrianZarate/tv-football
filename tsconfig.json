@@ -11,5 +11,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["shared/**/*.ts", "server/**/*.ts", "controller/**/*.ts", "tv/**/*.ts", "tests/**/*.ts"]
+  "include": ["game/**/*.ts", "shared/**/*.ts", "server/**/*.ts", "controller/**/*.ts", "tv/**/*.ts", "tests/**/*.ts"]
 }
