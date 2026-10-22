@@ -59,7 +59,7 @@ Un teléfono puede recuperar su lugar antes de 60 segundos solo con la clave `se
 
 ## Contenido del paquete y renovación
 
-`dist/tv/appinfo.json` aporta los campos documentados `id`, `version`, `vendor`, `type`, `main`, `title` e `icon`. ID: `com.systemautomatic.tvfootball.probe` (sin cambios para actualizar la app existente); versión: `0.2.1`; título: `Fútbol TV`; main: `index.html`; type: `web`; vendor: `Independent`. El icono PNG de 80×80 es arte geométrico original generado localmente, no una marca de fútbol copiada. Los recursos usan rutas relativas y dependencias incluidas, sin CDN.
+`dist/tv/appinfo.json` aporta los campos documentados `id`, `version`, `vendor`, `type`, `main`, `title` e `icon`. ID: `com.systemautomatic.tvfootball.probe` (sin cambios para actualizar la app existente); versión: `0.2.2`; título: `Fútbol TV`; main: `index.html`; type: `web`; vendor: `Independent`. El icono PNG de 80×80 es arte geométrico original generado localmente, no una marca de fútbol copiada. Los recursos usan rutas relativas y dependencias incluidas, sin CDN.
 
 La CLI 3.2.6 observada al empaquetar la prueba anterior funcionó, pero avisó que falta `requiredACG`; eso no demuestra que este nuevo IPK se haya empaquetado o instalado. El juego no llama API Luna. El paquete actual es para pruebas en Developer Mode, no para publicar en tienda; registrá cualquier rechazo en la TV y consultá la [guía ACG de LG](https://webostv.developer.lge.com/develop/guides/acg-guide) antes de cambiar permisos. npm también informó dependencias transitivas obsoletas de la CLI; esta se usa solo en desarrollo y no entra en la imagen de ejecución.
 

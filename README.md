@@ -36,5 +36,7 @@ Las claves de recuperación quedan en `sessionStorage` del navegador original, n
 | Operar el servidor HTTPS/WSS | [Despliegue con Dokploy](docs/deployment.md) |
 | Empaquetar e instalar la app LG | [Configuración webOS](docs/webos.md) |
 | Verificar el juego en dispositivos reales | [Lista de pruebas](docs/device-checklist.md) |
+| Entender el dibujo optimizado y el control remoto | [Rendimiento de TV](docs/tv-performance.md) |
+| Revisar la distribución de controles del teléfono | [Diseño de controles](docs/controller-layout.md) |
 
-La versión `0.2.1`, titulada `Fútbol TV`, conserva el ID `com.systemautomatic.tvfootball.probe` para actualizar la app de prueba existente. Una compilación web no es un IPK ni una instalación. El despliegue, el empaquetado y la instalación son acciones separadas del operador; no se debe publicar automáticamente, cambiar el VPS o el cortafuegos ni pedir secretos. Durante el juego no hace falta una computadora ni otro servidor en casa, una vez disponibles el servidor público y la app de TV instalada.
+La versión `0.2.2`, titulada `Fútbol TV`, conserva el ID `com.systemautomatic.tvfootball.probe` para actualizar la app de prueba existente. Una compilación web no es un IPK ni una instalación. El despliegue, el empaquetado y la instalación son acciones separadas del operador; no se debe publicar automáticamente, cambiar el VPS o el cortafuegos ni pedir secretos. Durante el juego no hace falta una computadora ni otro servidor en casa, una vez disponibles el servidor público y la app de TV instalada.

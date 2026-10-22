@@ -8,6 +8,14 @@ Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados
 2. Conectá ambos teléfonos, confirmá preparación, jugá partidos completos, ejercitá recuperación y ciclo de vida, y medí cada teléfono en reposo y con carga.
 3. Revisá los resultados nuevos con el usuario. **No afirmes aceptación física del juego completo a partir de la prueba anterior.**
 
+## Comparar volumen, control remoto y distribución (0.2.2)
+
+- [ ] Con la app cerrada, probar una pulsación de subir/bajar volumen y silenciar. Registrar si la respuesta es inmediata o tarda.
+- [ ] Repetir con la sala abierta y durante una partida en la versión anterior y en 0.2.2, manteniendo las mismas condiciones. Anotar la versión y el resultado; un video corto puede ayudar. No atribuir la causa al servidor o a CPU/GPU solo por la percepción.
+- [ ] Seleccionar **Nueva sala** con el control remoto: una pulsación de OK debe cambiar el código una vez; mantener OK no debe crear salas sucesivas. Repetir con clic y después de cerrar la superposición de volumen.
+- [ ] Solo marcador, reloj y estado esenciales en la vista principal; QR/dirección/código legibles cuando hacen falta. Diagnóstico técnico oculto salvo modo explícito `?debug=1`; no mide carga de CPU/GPU ni latencia del volumen. Ver [límites de la optimización](tv-performance.md).
+- [ ] En Android e iPhone, revisar grupos de movimiento y acciones, alcance de ambos pulgares y botones de al menos 64 píxeles lógicos, vertical y horizontal. Probar pulsaciones simultáneas, soltar y cancelar; los avisos de conexión/preparación no deben quedar ocultos. Ver [diseño de controles](controller-layout.md).
+
 ## Registrar el entorno
 
 No guardes direcciones privadas, cuentas, frases de acceso ni claves en Git. Ocultá datos sensibles en capturas y registros antes de compartir.
