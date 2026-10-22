@@ -3,17 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>TV Football — Controller probe</title>
+  <title>TV Football — Controller</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./main.js" defer></script>
 </head>
 <body>
-  <header><h1>TV Football · Connectivity probe</h1><p id="status" role="status">Enter the code shown on the TV.</p></header>
+  <header><h1>TV Football · Controller</h1><p id="status" role="status">Enter the code shown on the TV.</p></header>
   <form id="join-form">
     <label for="room">Room code</label>
     <input id="room" name="room" maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
     <button id="join" type="submit">Join room</button>
   </form>
+  <p id="storage-status" role="status"></p>
+  <p id="game-status" aria-live="polite"></p>
+  <button id="ready" type="button" hidden disabled>Ready to play</button>
   <section id="controls" aria-label="Player controls">
     <div class="movement"><button data-control="left" disabled>← Left</button><button data-control="right" disabled>Right →</button></div>
     <div class="actions"><button data-control="jump" disabled>Jump</button><button data-control="kick" disabled>Kick</button></div>
@@ -23,6 +26,6 @@
     <p>Phone ↔ TV, via relay: <span id="tv-rtt">Waiting</span></p>
     <p>Application round trips only. These are NOT button-to-screen latency measurements. TV replies before drawing. Rolling window: 120 samples.</p>
   </details>
-  <p class="hint">Use multiple fingers: hold movement while tapping Jump or Kick. If a device disconnects, create a new room on the TV; this prototype does not reconnect players.</p>
+  <p class="hint">Use multiple fingers: hold movement while tapping Jump or Kick. Game rooms reserve your player slot in this browser session. Returning within 60 seconds requires both players to confirm resume; both must also confirm a rematch. Keep this tab: a different browser cannot replace you. The TV owns the score and clock. Legacy probe rooms have no readiness button or recovery; create a new probe room after disconnecting.</p>
 </body>
 </html>

@@ -5,14 +5,25 @@ export const INPUT_LEASE_MS = 350;
 export const ROOM_CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/;
 export const neutralButtons = (): Buttons => ({ left: false, right: false, jump: false, kick: false });
 
+export const RESUME_KEY_PATTERN = /^[a-f0-9]{64}$/;
+export type GamePhase = 'lobby' | 'playing' | 'paused' | 'finished' | 'cancelled';
+export type GameStatus = { type: 'gameStatus'; phase: GamePhase; score: [number, number]; remainingMs: number };
+
 export type ClientMessage =
   | { type: 'create' }
+  | { type: 'createGame' }
+  | { type: 'ready' }
+  | { type: 'resume'; code: string; key: string }
+  | GameStatus
   | { type: 'join'; code: string }
   | { type: 'input'; sequence: number; buttons: Buttons }
   | { type: 'ping' | 'probe'; id: number }
   | { type: 'probeAck'; slot: Slot; id: number };
 
 export type ServerMessage =
+  | { type: 'resumeKey'; key: string }
+  | { type: 'ready'; slot: Slot }
+  | GameStatus
   | { type: 'created'; code: string }
   | { type: 'joined'; slot: Slot }
   | { type: 'state'; connected: [boolean, boolean] }
@@ -30,6 +41,14 @@ export function isButtons(value: unknown): value is Buttons {
   return record(value) && exact(value, ['left', 'right', 'jump', 'kick']) && Object.values(value).every(button => typeof button === 'boolean');
 }
 
+function isGameStatus(value: Record<string, unknown>): boolean {
+  return exact(value, ['type', 'phase', 'score', 'remainingMs'])
+    && ['lobby', 'playing', 'paused', 'finished', 'cancelled'].includes(value.phase as string)
+    && Array.isArray(value.score) && value.score.length === 2
+    && value.score.every(score => counter(score) && score <= 9999)
+    && counter(value.remainingMs) && value.remainingMs <= 120000;
+}
+
 /** Browser-safe validation shared by the relay and public clients. */
 export function parseClientMessage(raw: string): ClientMessage | null {
   if (new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES) return null;
@@ -37,7 +56,10 @@ export function parseClientMessage(raw: string): ClientMessage | null {
   try { value = JSON.parse(raw); } catch { return null; }
   if (!record(value)) return null;
   switch (value.type) {
-    case 'create': return exact(value, ['type']) ? { type: 'create' } : null;
+    case 'create': case 'createGame': return exact(value, ['type']) ? { type: value.type } : null;
+    case 'ready': return exact(value, ['type']) ? { type: 'ready' } : null;
+    case 'resume': return exact(value, ['type', 'code', 'key']) && typeof value.code === 'string' && ROOM_CODE_PATTERN.test(value.code) && typeof value.key === 'string' && RESUME_KEY_PATTERN.test(value.key) ? value as ClientMessage : null;
+    case 'gameStatus': return isGameStatus(value) ? value as GameStatus : null;
     case 'join': return exact(value, ['type', 'code']) && typeof value.code === 'string' && ROOM_CODE_PATTERN.test(value.code) ? { type: 'join', code: value.code } : null;
     case 'input': return exact(value, ['type', 'sequence', 'buttons']) && counter(value.sequence) && isButtons(value.buttons) ? { type: 'input', sequence: value.sequence, buttons: value.buttons } : null;
     case 'ping': case 'probe': return exact(value, ['type', 'id']) && counter(value.id) ? { type: value.type, id: value.id } : null;
@@ -52,6 +74,9 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   try { v = JSON.parse(raw); } catch { return null; }
   if (!record(v)) return null;
   switch (v.type) {
+    case 'resumeKey': return exact(v, ['type', 'key']) && typeof v.key === 'string' && RESUME_KEY_PATTERN.test(v.key) ? v as ServerMessage : null;
+    case 'ready': return exact(v, ['type', 'slot']) && (v.slot === 1 || v.slot === 2) ? v as ServerMessage : null;
+    case 'gameStatus': return isGameStatus(v) ? v as GameStatus : null;
     case 'created': return exact(v, ['type', 'code']) && typeof v.code === 'string' && ROOM_CODE_PATTERN.test(v.code) ? v as ServerMessage : null;
     case 'joined': return exact(v, ['type', 'slot']) && (v.slot === 1 || v.slot === 2) ? v as ServerMessage : null;
     case 'state': return exact(v, ['type', 'connected']) && Array.isArray(v.connected) && v.connected.length === 2 && v.connected.every(x => typeof x === 'boolean') ? v as ServerMessage : null;

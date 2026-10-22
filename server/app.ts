@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
-import { parseClientMessage, neutralButtons, MAX_MESSAGE_BYTES, INPUT_LEASE_MS, type Slot, type Buttons, type ServerMessage } from '../shared/protocol.js';
+import { parseClientMessage, neutralButtons, MAX_MESSAGE_BYTES, INPUT_LEASE_MS, type Slot, type Buttons, type ServerMessage, type GameStatus } from '../shared/protocol.js';
 
 export interface RelayOptions {
   publicOrigin: string;
@@ -33,8 +33,17 @@ interface Player {
   buttons: Buttons;
   updated: number;
   probes: Map<number, number>;
+  keyHash?: Buffer;
 }
-interface Room { code: string; tv: Peer; players: [Player?, Player?]; created: number }
+interface Room {
+  code: string;
+  tv: Peer;
+  players: [Player?, Player?];
+  created: number;
+  game: boolean;
+  status?: GameStatus;
+}
+const hashKey = (key: string) => createHash('sha256').update(key).digest();
 const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 export function createRelay(options: RelayOptions) {
@@ -114,6 +123,20 @@ export function createRelay(options: RelayOptions) {
       send(peer, { type: 'ended', reason }); peer.ws.close(1000, reason);
     }
   }
+  // Every assignment uses this path; slots are never deleted or reassigned by join.
+  function assign(room: Room, peer: Peer, slot: Slot, player: Player) {
+    peer.role = 'phone'; peer.room = room; peer.slot = slot; peer.sequence = -1;
+    player.peer = peer;
+    room.players[slot - 1] = player;
+    send(peer, { type: 'joined', slot });
+    if (room.game) {
+      const key = randomBytes(32).toString('hex');
+      player.keyHash = hashKey(key);
+      send(peer, { type: 'resumeKey', key });
+      if (room.status) send(peer, room.status);
+    }
+    state(room);
+  }
   wss.on('connection', (ws: WebSocket) => {
     const peer: Peer = { ws, role: 'unassigned', sequence: -1, rateStart: Date.now(), count: 0, opened: Date.now(), alive: true };
     peers.add(peer);
@@ -124,7 +147,9 @@ export function createRelay(options: RelayOptions) {
       const room = peer.room;
       if (!room) return;
       if (peer.role === 'tv') end(room, 'tv_disconnected');
-      else if (peer.slot) { neutral(room, peer.slot); room.players[peer.slot - 1]?.probes.clear(); state(room); }
+      else if (peer.slot && room.players[peer.slot - 1]?.peer === peer) {
+        neutral(room, peer.slot); room.players[peer.slot - 1]?.probes.clear(); state(room);
+      }
     });
     ws.on('message', (raw, binary) => {
       if (ws.readyState !== WebSocket.OPEN) return;
@@ -135,13 +160,28 @@ export function createRelay(options: RelayOptions) {
       const message = parseClientMessage(raw.toString());
       if (!message) { fail(peer, 'invalid_message', true); return; }
       if (message.type === 'ping') { send(peer, { type: 'pong', id: message.id }); return; }
-      if (message.type === 'create' || message.type === 'join') {
+      if (message.type === 'resume') {
         if (peer.role !== 'unassigned') { fail(peer, 'role_locked'); return; }
-        if (message.type === 'create') {
+        const room = rooms.get(message.code);
+        if (!room) { fail(peer, 'room_unavailable', true); return; }
+        const hash = hashKey(message.key);
+        const index = room.game ? room.players.findIndex(p => p?.keyHash && timingSafeEqual(p.keyHash, hash)) : -1;
+        if (index < 0) { fail(peer, 'resume_invalid'); return; }
+        const player = room.players[index]!;
+        // A credential never evicts an open or half-closed connection.
+        if (player.peer.ws.readyState !== WebSocket.CLOSED) { fail(peer, 'resume_busy'); return; }
+        const slot = (index + 1) as Slot;
+        neutral(room, slot); player.probes.clear(); player.updated = now;
+        // No await between credential validation and its one-time rotation.
+        assign(room, peer, slot, player); return;
+      }
+      if (message.type === 'create' || message.type === 'createGame' || message.type === 'join') {
+        if (peer.role !== 'unassigned') { fail(peer, 'role_locked'); return; }
+        if (message.type === 'create' || message.type === 'createGame') {
           if (rooms.size >= limits.rooms) { fail(peer, 'room_limit'); return; }
           let code: string;
           do { code = Array.from(randomBytes(8), b => alphabet[b % alphabet.length]).join(''); } while (rooms.has(code));
-          const room: Room = { code, tv: peer, players: [], created: now };
+          const room: Room = { code, tv: peer, players: [], created: now, game: message.type === 'createGame' };
           // Keep the array's length exactly two, including unoccupied slots.
           room.players = [undefined, undefined];
           peer.role = 'tv'; peer.room = room; rooms.set(code, room);
@@ -151,14 +191,23 @@ export function createRelay(options: RelayOptions) {
         if (!room) { fail(peer, 'room_unavailable', true); return; }
         const index = room.players.findIndex(p => p === undefined);
         if (index === -1) { fail(peer, 'room_full', true); return; }
-        peer.role = 'phone'; peer.room = room; peer.slot = (index + 1) as Slot;
-        room.players[index] = { peer, buttons: neutralButtons(), updated: now, probes: new Map() };
-        send(peer, { type: 'joined', slot: peer.slot }); state(room); return;
+        assign(room, peer, (index + 1) as Slot, { peer, buttons: neutralButtons(), updated: now, probes: new Map() }); return;
       }
       const room = peer.room;
       if (!room || !rooms.has(room.code)) { fail(peer, 'not_assigned', true); return; }
+      if (message.type === 'gameStatus') {
+        if (peer !== room.tv) { fail(peer, 'tv_only'); return; }
+        if (!room.game) { fail(peer, 'game_only'); return; }
+        room.status = message;
+        for (const player of room.players) if (player) send(player.peer, message);
+        return;
+      }
+      if (message.type === 'ready') {
+        if (!room.game || peer.role !== 'phone' || !peer.slot || room.players[peer.slot - 1]?.peer !== peer) { fail(peer, 'game_phone_only'); return; }
+        send(room.tv, { type: 'ready', slot: peer.slot }); return;
+      }
       if (message.type === 'input' || message.type === 'probe') {
-        if (peer.role !== 'phone' || !peer.slot) { fail(peer, 'phone_only'); return; }
+        if (peer.role !== 'phone' || !peer.slot || room.players[peer.slot - 1]?.peer !== peer) { fail(peer, 'phone_only'); return; }
         const player = room.players[peer.slot - 1]!;
         if (message.type === 'input') {
           if (message.sequence <= peer.sequence) { fail(peer, 'stale_sequence'); return; }
