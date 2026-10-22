@@ -54,6 +54,9 @@ test('TV and phone static markup is Spanish, accessible and explains diagnostics
   }
   const tv = await readFile('tv/index.html', 'utf8');
   assert.match(tv, /Nueva sala/); assert.match(tv, /código de sala/); assert.match(tv, /aria-label="Tiempo restante/);
+  assert.match(tv, /id="score" aria-label="Marcador:/);
+  assert.match(tv, /<footer id="diagnostics" hidden>/);
+  assert.ok(!tv.includes('id="players"'), 'readiness belongs only to the status HUD');
   const phone = await readFile('controller/index.html', 'utf8');
   for (const word of ['Izquierda', 'Derecha', 'Saltar', 'Patear', 'Listo para jugar', '60 segundos', '120 muestras']) assert.ok(phone.includes(word), word);
 });

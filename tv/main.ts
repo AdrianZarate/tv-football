@@ -15,7 +15,9 @@ const roomLabel = document.querySelector<HTMLElement>('#room')!;
 const qr = document.querySelector<HTMLImageElement>('#qr')!;
 const button = document.querySelector<HTMLButtonElement>('#new-room')!;
 const clock = document.querySelector<HTMLElement>('#clock')!;
-const players = document.querySelector<HTMLElement>('#players')!;
+const score = document.querySelector<HTMLElement>('#score')!;
+const debug = new URLSearchParams(location.search).get('debug') === '1';
+document.querySelector<HTMLElement>('#diagnostics')!.hidden = !debug;
 let socket: WebSocket | undefined;
 let generation = 0;
 let diagnosticId = 0;
@@ -29,7 +31,7 @@ const hidden = () => document.hidden || pageHidden;
 const frameIntervals: number[] = [];
 const host = new FootballHost(send, () => performance.now());
 document.querySelector('#controller-url')!.textContent = publicOrigin;
-document.querySelector('#endpoint')!.textContent = `Servidor de enlace: ${relayUrl} · La TV no recupera partidas terminadas`;
+if (debug) text(document.querySelector<HTMLElement>('#endpoint')!, `Servidor de enlace: ${relayUrl} · La TV no recupera partidas terminadas`);
 
 function send(message: ClientMessage) {
   if (socket?.readyState !== WebSocket.OPEN) return;
@@ -45,10 +47,10 @@ function text(element: HTMLElement, value: string) {
 function renderStatus() {
   const state = host.snapshot();
   text(clock, formatClock(state.remainingMs));
-  text(players, state.connected.map((present, i) => `P${i + 1} ${!present ? 'sin conexión' : state.ready[i] ? 'listo' : 'conectado'}`).join(' · '));
+  text(score, `${state.score[0]} – ${state.score[1]}`);
   if (code) text(status, describeMatch(state, performance.now()));
   // Collapse only once play begins. The full logical pitch is always visible, never cropped.
-  document.body.dataset.phase = state.phase;
+  if (document.body.dataset.phase !== state.phase) document.body.dataset.phase = state.phase;
 }
 function stop(message: string) {
   const old = socket;
@@ -118,7 +120,7 @@ class HostedGameScene extends GameScene {
     const now = performance.now();
     const delta = now - this.lastUpdate;
     this.lastUpdate = now;
-    if (delta > 0 && delta < 2000 && !hidden()) {
+    if (debug && delta > 0 && delta < 2000 && !hidden()) {
       frameIntervals.push(delta); if (frameIntervals.length > 120) frameIntervals.shift();
     }
     host.update(delta / 1000);
@@ -129,13 +131,50 @@ class HostedGameScene extends GameScene {
 new Phaser.Game({
   type: Phaser.AUTO, width: FIELD.width, height: FIELD.height,
   parent: 'stage', backgroundColor: '#172940', scene: [new HostedGameScene()],
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  // Phaser 3.90 uses these logical dimensions directly, with CSS-only FIT scaling (no DPR multiplier).
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, zoom: 1 },
   audio: { noAudio: true },
+  fps: { target: 30, limit: 30 },
+  render: { antialias: true, antialiasGL: false },
+  input: { keyboard: false }, // Phones own gameplay input; DOM owns the remote button.
 });
-button.addEventListener('click', newRoom); button.focus();
+let enterHeld = false;
+let suppressNativeClick = false;
+const isEnter = (event: KeyboardEvent) => event.key === 'Enter' || (!event.key && event.keyCode === 13);
+const roomFocus = () => document.activeElement === button || document.activeElement === document.body
+  || document.activeElement?.tagName === 'CANVAS';
+function restoreFocus() {
+  if (!hidden() && roomFocus()) button.focus();
+}
+document.addEventListener('keydown', event => {
+  if (!isEnter(event)) {
+    // Space retains native button activation; unrelated/system keys never change Enter ownership.
+    if (event.key === ' ' && document.activeElement === button && !enterHeld) suppressNativeClick = false;
+    return;
+  }
+  if (hidden() || !roomFocus() || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  event.preventDefault(); // Only the Enter press owned by Nueva sala is consumed.
+  if (event.repeat || enterHeld) return;
+  enterHeld = true; suppressNativeClick = true;
+  button.focus(); newRoom();
+});
+document.addEventListener('keyup', event => {
+  if (!isEnter(event) || !enterHeld) return;
+  event.preventDefault(); enterHeld = false;
+});
+button.addEventListener('click', event => {
+  // Native keyboard click can arrive on keydown or keyup. Pointer clicks remain independent.
+  if (event.detail === 0 && suppressNativeClick) return;
+  suppressNativeClick = false;
+  newRoom();
+});
+window.addEventListener('blur', () => { enterHeld = false; });
+window.addEventListener('focus', restoreFocus);
+button.focus();
 // TV loss ends the room; only phones can resume an existing player session.
 function foreground() {
   if (!hidden() && initialRoomPending && !socket) newRoom();
+  restoreFocus();
 }
 window.addEventListener('pagehide', () => {
   pageHidden = true;
@@ -155,6 +194,7 @@ setInterval(() => {
       if (relayRtt.begin(id, now)) send({ type: 'ping', id });
     }
   }
+  if (!debug) return;
   text(document.querySelector<HTMLElement>('#relay-rtt')!, `RTT de aplicación TV ↔ servidor: ${formatRttSpanish(relayRtt)}`);
   const sorted = [...frameIntervals].sort((a, b) => a - b);
   const p50 = sorted[Math.max(0, Math.ceil(sorted.length * 0.5) - 1)];

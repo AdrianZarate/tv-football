@@ -9,7 +9,7 @@
 </head>
 <body data-phase="lobby">
   <header>
-    <div class="heading"><h1>Fútbol TV</h1><span id="players">P1 sin conexión · P2 sin conexión</span></div>
+    <strong id="score" aria-label="Marcador: P1 azul contra P2 naranja">0 – 0</strong>
     <strong id="clock" aria-label="Tiempo restante del partido">02:00</strong>
     <button id="new-room" type="button">Nueva sala</button>
     <p id="status" role="status">Iniciando el juego…</p>
@@ -22,10 +22,9 @@
       <p>Sala <strong id="room">—</strong></p>
       <p id="controller-url">—</p>
       <p id="join-help">Escaneá con cada teléfono, o abrí la dirección e ingresá el código de sala.</p>
-      <p>Ambos jugadores deben pulsar <strong>Listo para jugar</strong> en sus teléfonos. La TV controla el reloj y el marcador.</p>
     </aside>
   </main>
-  <footer>
+  <footer id="diagnostics" hidden>
     <details>
       <summary>Diagnóstico de conexión</summary>
       <p id="relay-rtt">RTT de aplicación TV ↔ servidor: esperando muestras</p>

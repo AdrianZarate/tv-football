@@ -2,13 +2,12 @@
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; color: #edf4ff; background: #0c1423; font: 20px Arial, sans-serif; }
 body { display: flex; flex-direction: column; padding: 16px 28px; }
 header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; flex-shrink: 0; }
-h1 { font-size: 28px; margin: 0 24px 0 0; display: inline; }
 h2 { font-size: 24px; margin: 0 0 12px; }
 p { margin: 8px 0; }
-.heading { flex: 1; }
-#players { font-size: 20px; }
+#score { font: bold 40px monospace; letter-spacing: 4px; }
+[hidden] { display: none !important; }
 #clock { font: bold 36px monospace; color: #fff3b0; }
-#status { width: 100%; margin: 0; min-height: 48px; font-size: 22px; }
+#status { width: 100%; margin: 0; min-height: 48px; font-size: 22px; line-height: 1.25; }
 button { font: bold 22px Arial, sans-serif; padding: 10px 24px; border-radius: 8px; border: 2px solid #a1bcdf; background: #254267; color: white; }
 button:focus, summary:focus { outline: 4px solid #ffe17b; outline-offset: 2px; }
 main { display: flex; flex: 1; min-height: 0; gap: 24px; margin-top: 8px; }

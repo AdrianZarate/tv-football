@@ -4,16 +4,17 @@ import { BALL, FIELD, PLAYER, type FootballMatch, type MatchSnapshot, type Playe
 export type SnapshotSource = () => MatchSnapshot;
 const COLORS = [0x389dff, 0xff9845] as const;
 const INK = 0x172940;
-const FONT = 'Arial, sans-serif';
+const textureKey = (name: string) => `football-${name}`;
+type PlayerView = { body: Phaser.GameObjects.Image; shadow: Phaser.GameObjects.Image; kick: Phaser.GameObjects.Image };
 
-/** Original canvas geometry only. The TV host, not this scene, advances the model. */
+/** Original artwork baked once. The TV host, not this scene, advances the model. */
 export class GameScene extends Phaser.Scene {
   private readonly readSnapshot: SnapshotSource;
-  private actors!: Phaser.GameObjects.Graphics;
-  private scoreLabel!: Phaser.GameObjects.Text;
-  private clockLabel!: Phaser.GameObjects.Text;
-  private statusLabel!: Phaser.GameObjects.Text;
-  private readyLabel!: Phaser.GameObjects.Text;
+  private playerViews: PlayerView[] = [];
+  private ball!: Phaser.GameObjects.Image;
+  private ballShadow!: Phaser.GameObjects.Image;
+  private images: Phaser.GameObjects.Image[] = [];
+  private ownedTextures: string[] = [];
 
   constructor(source: FootballMatch | SnapshotSource) {
     super({ key: 'GameScene' });
@@ -21,30 +22,63 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.drawPitch();
-    this.actors = this.add.graphics();
-    this.scoreLabel = this.add.text(FIELD.width / 2, 18, '', {
-      fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold',
-    }).setOrigin(0.5, 0);
-    this.clockLabel = this.add.text(FIELD.width - 44, 24, '', {
-      fontFamily: FONT, fontSize: '30px', color: '#fff3b0',
-    }).setOrigin(1, 0);
-    this.statusLabel = this.add.text(FIELD.width / 2, 130, '', {
-      fontFamily: FONT, fontSize: '28px', color: '#ffffff', align: 'center',
-      backgroundColor: '#172940', padding: { x: 18, y: 10 },
-    }).setOrigin(0.5, 0);
-    this.readyLabel = this.add.text(FIELD.width / 2, 690, '', {
-      fontFamily: FONT, fontSize: '21px', color: '#ffffff',
-    }).setOrigin(0.5);
+    this.bake('pitch', FIELD.width, FIELD.height, graphics => this.drawPitch(graphics));
+    for (const slot of [1, 2] as const) {
+      for (const facing of [-1, 1] as const) {
+        this.bake(`player-${slot}-${facing === 1 ? 'right' : 'left'}`, 72, 112,
+          graphics => this.drawPlayer(graphics, slot, facing));
+      }
+    }
+    this.bake('player-shadow', 70, 16, graphics => {
+      graphics.fillStyle(INK, 0.22).fillEllipse(35, 8, PLAYER.halfWidth * 2 + 14, 12);
+    });
+    this.bake('ball-shadow', 40, 12, graphics => {
+      graphics.fillStyle(INK, 0.2).fillEllipse(20, 6, 37, 9);
+    });
+    this.bake('kick', 116, 36, graphics => {
+      graphics.lineStyle(4, 0xfff5a1, 0.9);
+      graphics.lineBetween(88, 15, 107, 4).lineBetween(90, 23, 113, 23);
+    });
+    this.bake('ball', 40, 40, graphics => this.drawBall(graphics));
+    this.image('pitch').setOrigin(0);
+    this.playerViews = [1, 2].map(slot => ({
+      shadow: this.image('player-shadow'),
+      body: this.image(`player-${slot}-right`).setOrigin(0.5, 108 / 112),
+      kick: this.image('kick').setOrigin(0.5, 32 / 36),
+    }));
+    this.ballShadow = this.image('ball-shadow');
+    this.ball = this.image('ball');
+    this.events.once('shutdown', () => {
+      // Destroy every user of these textures before removing their canvas/GPU sources.
+      for (const image of this.images) image.destroy();
+      for (const key of this.ownedTextures) this.textures.remove(key);
+      this.images = []; this.ownedTextures = []; this.playerViews = [];
+    });
     this.renderSnapshot(this.readSnapshot());
+  }
+
+  private bake(name: string, width: number, height: number, draw: (graphics: Phaser.GameObjects.Graphics) => void): void {
+    const key = textureKey(name);
+    if (this.textures.exists(key)) return;
+    const graphics = this.add.graphics();
+    draw(graphics);
+    // Phaser uses a local Canvas source and refreshes it for either renderer; no image URL.
+    graphics.generateTexture(key, width, height);
+    graphics.destroy();
+    this.ownedTextures.push(key);
+  }
+
+  private image(name: string): Phaser.GameObjects.Image {
+    const image = this.add.image(0, 0, textureKey(name));
+    this.images.push(image);
+    return image;
   }
 
   update(): void {
     this.renderSnapshot(this.readSnapshot());
   }
 
-  private drawPitch(): void {
-    const graphics = this.add.graphics();
+  private drawPitch(graphics: Phaser.GameObjects.Graphics): void {
     graphics.fillStyle(0x172940).fillRect(0, 0, FIELD.width, FIELD.height);
     graphics.fillStyle(0x8bd3e6).fillRect(0, FIELD.top, FIELD.width, FIELD.floor - FIELD.top);
     // Clouds, stands and a low skyline are hand-built shapes, not image assets.
@@ -68,9 +102,6 @@ export class GameScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x36566e, 0.4).lineBetween(FIELD.left, FIELD.top, FIELD.right, FIELD.top);
     this.drawGoal(graphics, FIELD.left - 48, FIELD.left, COLORS[0]);
     this.drawGoal(graphics, FIELD.right, FIELD.right + 48, COLORS[1]);
-    this.add.text(28, 26, 'CANCHA DE BOLSILLO', {
-      fontFamily: FONT, fontSize: '25px', color: '#bdebea', fontStyle: 'bold',
-    });
   }
 
   private drawGoal(graphics: Phaser.GameObjects.Graphics, left: number, right: number, color: number): void {
@@ -83,32 +114,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderSnapshot(state: MatchSnapshot): void {
-    this.actors.clear();
-    for (const player of state.players) this.drawPlayer(player);
-    this.drawBall(state.ball.x, state.ball.y);
-    this.scoreLabel.setText(`P1  ${state.score[0]}  :  ${state.score[1]}  P2`);
-    const seconds = Math.ceil(state.remainingMs / 1000);
-    this.clockLabel.setText(`${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`);
-    const messages: Record<MatchSnapshot['phase'], string> = {
-      lobby: 'Conectá dos teléfonos; ambos deben pulsar Listo para jugar',
-      playing: '',
-      paused: state.disconnectDeadlineMs === null
-        ? 'PAUSA — ambos deben confirmar para reanudar'
-        : 'PAUSA — volvé a conectar los teléfonos antes de 60 segundos',
-      finished: state.winner === null ? 'EMPATE — ambos deben confirmar la revancha' : `GANA P${state.winner} — ambos deben confirmar la revancha`,
-      cancelled: 'PARTIDO CANCELADO — sin ganador. Creá una Nueva sala.',
-    };
-    this.statusLabel.setText(messages[state.phase]).setVisible(state.phase !== 'playing');
-    this.readyLabel.setText(state.phase === 'playing'
-      ? 'P1 AZUL  ·  Mover + Saltar + Patear  ·  P2 NARANJA'
-      : state.players.map((player, index) => `P${player.slot}: ${!state.connected[index] ? 'sin conexión' : state.ready[index] ? 'listo' : 'esperando'}`).join('     |     '));
+    for (const player of state.players) {
+      const view = this.playerViews[player.slot - 1]!;
+      view.shadow.setPosition(player.x, FIELD.floor + 3);
+      view.body.setPosition(player.x, player.y)
+        .setTexture(textureKey(`player-${player.slot}-${player.facing === 1 ? 'right' : 'left'}`));
+      view.kick.setPosition(player.x, player.y).setFlipX(player.facing === -1).setVisible(player.kickCooldownMs > 300);
+    }
+    this.ballShadow.setPosition(state.ball.x, FIELD.floor + 3);
+    this.ball.setPosition(state.ball.x, state.ball.y);
   }
 
-  private drawPlayer(player: PlayerSnapshot): void {
-    const graphics = this.actors;
-    const { x, y, facing } = player;
-    const color = COLORS[player.slot - 1]!;
-    graphics.fillStyle(0x172940, 0.22).fillEllipse(x, FIELD.floor + 3, PLAYER.halfWidth * 2 + 14, 12);
+  private drawPlayer(graphics: Phaser.GameObjects.Graphics, slot: PlayerSnapshot['slot'], facing: PlayerSnapshot['facing']): void {
+    const x = 36, y = 108;
+    const color = COLORS[slot - 1]!;
     // Heavy outline, round head, jersey, short arms and oversized boots.
     graphics.fillStyle(INK).fillRoundedRect(x - 25, y - 66, 50, 51, 13);
     graphics.fillStyle(color).fillRoundedRect(x - 21, y - 62, 42, 42, 10);
@@ -123,18 +142,12 @@ export class GameScene extends Phaser.Scene {
     graphics.fillStyle(INK).fillCircle(x + facing * 9, y - 79, 3);
     graphics.lineStyle(2, INK).lineBetween(x + facing * 5, y - 67, x + facing * 13, y - 69);
     graphics.fillStyle(0xffffff).fillCircle(x, y - 43, 7);
-    graphics.fillStyle(INK).fillCircle(x + (player.slot === 1 ? 0 : -2), y - 43, 2);
-    if (player.slot === 2) graphics.fillCircle(x + 3, y - 43, 2);
-    if (player.kickCooldownMs > 300) {
-      graphics.lineStyle(4, 0xfff5a1, 0.9);
-      graphics.lineBetween(x + facing * 30, y - 17, x + facing * 49, y - 28);
-      graphics.lineBetween(x + facing * 32, y - 9, x + facing * 55, y - 9);
-    }
+    graphics.fillStyle(INK).fillCircle(x + (slot === 1 ? 0 : -2), y - 43, 2);
+    if (slot === 2) graphics.fillCircle(x + 3, y - 43, 2);
   }
 
-  private drawBall(x: number, y: number): void {
-    const graphics = this.actors;
-    graphics.fillStyle(0x172940, 0.2).fillEllipse(x, FIELD.floor + 3, 37, 9);
+  private drawBall(graphics: Phaser.GameObjects.Graphics): void {
+    const x = 20, y = 20;
     graphics.fillStyle(INK).fillCircle(x, y, BALL.radius);
     graphics.fillStyle(0xfffdf2).fillCircle(x, y, BALL.radius - 2);
     graphics.fillStyle(INK).beginPath();
