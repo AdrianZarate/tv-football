@@ -8,24 +8,37 @@
   <script src="./main.js" defer></script>
 </head>
 <body>
-  <header><h1>Fútbol TV · Controles</h1><p id="status" role="status">Ingresá el código que aparece en la TV.</p></header>
+  <header>
+    <h1>Fútbol TV <span>· Controles</span></h1>
+    <p id="status" role="status">Ingresá el código que aparece en la TV.</p>
+  </header>
   <form id="join-form">
     <label for="room">Código de sala</label>
     <input id="room" name="room" maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
     <button id="join" type="submit">Entrar a la sala</button>
   </form>
-  <p id="storage-status" role="status"></p>
-  <p id="game-status" aria-live="polite"></p>
-  <button id="ready" type="button" hidden disabled>Listo para jugar</button>
-  <section id="controls" aria-label="Controles del jugador">
-    <div class="movement"><button data-control="left" disabled>← Izquierda</button><button data-control="right" disabled>Derecha →</button></div>
-    <div class="actions"><button data-control="jump" disabled>Saltar</button><button data-control="kick" disabled>Patear</button></div>
+  <section class="preparation" aria-label="Estado y preparación">
+    <p id="storage-status" role="status"></p>
+    <p id="game-status" aria-live="polite"></p>
+    <button id="ready" type="button" hidden disabled>Listo para jugar</button>
   </section>
-  <details open><summary>Mediciones de conexión</summary>
+  <section id="controls" aria-label="Controles del jugador">
+    <div class="movement" role="group" aria-label="Movimiento">
+      <button type="button" data-control="left" aria-label="Izquierda" disabled><span class="direction-icon" aria-hidden="true">←</span> <span class="control-label">Izquierda</span></button>
+      <button type="button" data-control="right" aria-label="Derecha" disabled><span class="control-label">Derecha</span> <span class="direction-icon" aria-hidden="true">→</span></button>
+    </div>
+    <div class="actions" role="group" aria-label="Acciones">
+      <button type="button" data-control="jump" disabled><span class="action-icon jump-icon" aria-hidden="true"></span><span class="control-label">Saltar</span></button>
+      <button type="button" data-control="kick" disabled><span class="action-icon kick-icon" aria-hidden="true"></span><span class="control-label">Patear</span></button>
+    </div>
+  </section>
+  <details><summary>Ayuda y conexión</summary>
+    <p>Usá varios dedos: mantené el movimiento mientras pulsás Saltar o Patear.</p>
+    <p>Las salas de juego reservan tu lugar en esta sesión del navegador. Si volvés dentro de 60 segundos, ambos deben confirmar la reanudación; también deben confirmar una revancha. Conservá esta pestaña: otro navegador no puede reemplazarte. La TV controla el marcador y el reloj.</p>
+    <p>Las salas de prueba anteriores no tienen botón de preparación ni recuperación; creá otra sala de prueba después de desconectarte.</p>
     <p>Teléfono ↔ servidor: <span id="relay-rtt">Esperando muestras</span></p>
     <p>Teléfono ↔ TV, a través del servidor: <span id="tv-rtt">Esperando muestras</span></p>
     <p>RTT es el tiempo de ida y vuelta de un mensaje de aplicación. Estas mediciones NO son la latencia del botón a la pantalla. La TV responde antes de dibujar. Ventana móvil: 120 muestras.</p>
   </details>
-  <p class="hint">Usá varios dedos: mantené el movimiento mientras pulsás Saltar o Patear. Las salas de juego reservan tu lugar en esta sesión del navegador. Si volvés dentro de 60 segundos, ambos deben confirmar la reanudación; también deben confirmar una revancha. Conservá esta pestaña: otro navegador no puede reemplazarte. La TV controla el marcador y el reloj. Las salas de prueba anteriores no tienen botón de preparación ni recuperación; creá otra sala de prueba después de desconectarte.</p>
 </body>
 </html>
