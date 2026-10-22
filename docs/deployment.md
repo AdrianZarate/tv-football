@@ -1,16 +1,16 @@
-# Deploy the relay with Dokploy
+# Desplegar el servidor de enlace con Dokploy
 
-Deploy only after explicit user approval, using the user-approved ref. These are operator instructions, not an automatic push or evidence of a completed game deployment. The previous connectivity version was validated; the new full game still needs actual-device acceptance. Never request account credentials or make VPS/firewall changes as part of local validation.
+Solo el operador debe desplegar, con aprobación explícita del usuario y la referencia aprobada. Estas son instrucciones, no una publicación automática ni evidencia de un despliegue completado. La versión anterior de conectividad se validó; el juego completo sigue pendiente de aceptación en dispositivos reales. Nunca pidas credenciales de cuentas ni cambies el VPS o el cortafuegos como parte de verificaciones locales.
 
-## Quick path
+## Inicio rápido
 
-1. In DNS, point `tvfootbal.systemautomatic.xyz` to `<ACTUAL_VPS_IPV4>` with an A record. Add an AAAA record only for `<ACTUAL_WORKING_VPS_IPV6>` if that address and route actually work. Do not invent an address or leave a stale AAAA record.
-2. In Dokploy, create an application from the approved repository/ref. Select **Dockerfile**, repository-root context and `Dockerfile`. Do not publish host port 3000; Traefik must reach container port **3000** through Dokploy's internal network.
-3. Set runtime variables below. Keep the Docker build argument `PUBLIC_ORIGIN=https://tvfootbal.systemautomatic.xyz` aligned with the runtime value. The same origin must be used for any separately built TV IPK.
-4. Add domain `tvfootbal.systemautomatic.xyz`, path `/`, container port `3000`, HTTPS enabled with a valid public certificate. TLS terminates at Traefik; internal container traffic is HTTP. Confirm certificate issuance before connecting devices.
-5. Deploy only when authorized, then run the smoke checks below. Never disable certificate validation to make the TV connect.
+1. En DNS, apuntá `tvfootbal.systemautomatic.xyz` a `<ACTUAL_VPS_IPV4>` con un registro A. Agregá AAAA solo para `<ACTUAL_WORKING_VPS_IPV6>` si esa dirección y su ruta funcionan realmente. No inventes direcciones ni dejes un AAAA desactualizado.
+2. En Dokploy, creá una aplicación con el repositorio y la referencia aprobados. Elegí **Dockerfile**, contexto en la raíz y `Dockerfile`. No publiques el puerto 3000 del equipo anfitrión; Traefik debe llegar al puerto **3000** del contenedor por la red interna de Dokploy.
+3. Configurá las variables siguientes. Mantené el argumento de compilación Docker `PUBLIC_ORIGIN=https://tvfootbal.systemautomatic.xyz` igual al valor de ejecución. El IPK de TV compilado por separado debe usar el mismo origen.
+4. Agregá el dominio `tvfootbal.systemautomatic.xyz`, ruta `/`, puerto de contenedor `3000`, HTTPS habilitado y certificado público válido. TLS termina en Traefik; el tráfico interno al contenedor es HTTP. Confirmá la emisión del certificado antes de conectar dispositivos.
+5. Desplegá solo con autorización y luego hacé las comprobaciones siguientes. Nunca desactives la validación de certificados para conectar la TV.
 
-## Runtime configuration
+## Configuración de ejecución
 
 ```text
 HOST=0.0.0.0
@@ -23,21 +23,21 @@ MAX_ROOMS=20
 ROOM_TTL_MS=1800000
 ```
 
-Enable `ALLOW_TV_OPAQUE_ORIGIN=true` explicitly when testing the installed TV's `null`/absent Origin handshake. Record the observed Origin behavior and the reason for enabling it. The production transport still requires HTTPS/WSS; this flag does not grant TV room ownership or permit replacing another socket. See the full [environment table](development.md#environment-reference).
+Habilitá `ALLOW_TV_OPAQUE_ORIGIN=true` deliberadamente para probar el enlace de la TV instalada con Origin `null` o ausente. Registrá el comportamiento observado y el motivo. El transporte de producción sigue siendo HTTPS/WSS; esta opción no concede propiedad de sala ni permite reemplazar conexiones. Consultá la [tabla de variables](development.md#referencia-de-variables).
 
-The multi-stage Node 24 Alpine Dockerfile builds with `npm ci`. Runtime installs only production dependencies (including `tsx`), copies server/shared/built assets, runs as `node`, and uses an exec-form Node CMD for shutdown signals. `EXPOSE 3000` documents an internal port; it does not publish it. The healthcheck requests `/healthz`. Secrets, local environment files, Git history, node_modules and IPKs are excluded from the build context.
+El Dockerfile multietapa usa Node 24 Alpine y compila con `npm ci`. La imagen final instala solo dependencias de producción (incluido `tsx`), copia servidor, código compartido y recursos compilados, ejecuta como `node` y usa CMD de Node en formato ejecutivo para recibir señales de apagado. `EXPOSE 3000` documenta un puerto interno, no lo publica. La comprobación de salud consulta `/healthz`. Secretos, archivos locales de entorno, historial Git, node_modules e IPK quedan fuera del contexto de compilación.
 
-## HTTPS and WebSocket proxy checks
+## Comprobar HTTPS y el intermediario WebSocket
 
-Traefik normally handles WebSocket upgrades automatically. Preserve `Upgrade: websocket` and `Connection: Upgrade` semantics for `/ws`; do not introduce response buffering, path rewriting, redirect loops or middleware stripping the upgrade. Ensure idle timeouts allow ongoing heartbeat traffic. Do not add a second raw public port or make ad-hoc firewall changes.
+Traefik normalmente gestiona la actualización a WebSocket automáticamente. Conservá la semántica de `Upgrade: websocket` y `Connection: Upgrade` para `/ws`; no agregues almacenamiento intermedio de respuestas, cambios de ruta, bucles de redirección ni componentes que quiten la actualización. Los plazos de inactividad deben permitir el tráfico periódico de comprobación de actividad. No abras otro puerto público directo ni cambies el cortafuegos de forma improvisada.
 
-After authorized deployment:
+Después de un despliegue autorizado:
 
 ```sh
 curl --fail https://tvfootbal.systemautomatic.xyz/healthz
 ```
 
-Expected body: `{"ok":true}`. Open the HTTPS controller page and confirm its local JS/CSS load without mixed content or certificate errors. For a WSS check, run in that page's browser console (the correct browser Origin matters):
+Cuerpo esperado: `{"ok":true}`. Abrí la página HTTPS de controles y verificá que cargue JS/CSS locales sin contenido mixto ni errores de certificado. Para comprobar WSS, ejecutá esto en la consola de esa página (importa el Origin del navegador):
 
 ```js
 const smoke = new WebSocket('wss://tvfootbal.systemautomatic.xyz/ws');
@@ -46,14 +46,14 @@ smoke.onmessage = event => { console.log(event.data); smoke.close(); };
 smoke.onerror = () => console.error('WSS smoke failed');
 ```
 
-Expect `{"type":"pong","id":1}` and an upgraded `101` connection in the Network inspector. If it fails, inspect DNS, certificate chain, proxy upgrade routing and relay Origin configuration; do not paste sensitive logs into chat. `/tv/` can check the game with two browser controllers pressing Ready, but is **desktop smoke only**, not installed-TV proof. A proxy healthcheck alone does not establish WSS correctness.
+Se espera `{"type":"pong","id":1}` y conexión `101` en el inspector de red. Ante fallos, revisá DNS, cadena de certificados, ruta de actualización del intermediario y configuración Origin; no pegues registros sensibles en el chat. `/tv/` permite comprobar el juego con dos controles de navegador pulsando **Listo para jugar**, pero es **solo una prueba de escritorio**, no prueba de la app instalada. Una consulta de salud no demuestra que WSS funcione.
 
-## Next gate
+## Siguiente verificación
 
-Package the TV with the same public origin using [webOS instructions](webos.md), then complete the [device checklist](device-checklist.md). Update both TV and controller/relay from the approved game revision: the old probe's controls are not the full-game acceptance gate. The TV owns physics, goals, score and clock; the VPS only validates and relays bounded messages. See [match rules](game.md).
+Empaquetá la TV con el mismo origen siguiendo [webOS](webos.md) y completá la [lista de dispositivos](device-checklist.md). Actualizá TV y controles/servidor desde la revisión aprobada del juego: los controles de la prueba anterior no satisfacen la aceptación del juego completo. La TV decide física, goles, marcador y reloj; el VPS solo valida y reenvía mensajes acotados. Consultá las [reglas](game.md).
 
-Phone disconnection pauses the match for up to 60 seconds, with same-browser reserved-slot recovery and both-player confirmation. TV backgrounding, TV connection loss or a relay restart ends the room; there is no TV recovery promise. Users may need New room after failures. Resume keys belong only in the phone browser's `sessionStorage`, never in shared URLs, proxy logs or support screenshots. Do not log WebSocket payloads containing keys.
+Una desconexión de teléfono pausa hasta 60 segundos, con lugar reservado a la misma sesión del navegador y confirmación de ambos. El segundo plano o la pérdida de conexión de la TV, o un reinicio del servidor, terminan la sala; no se promete recuperación de TV. Puede hacer falta **Nueva sala**. Las claves de recuperación pertenecen solo al `sessionStorage` del teléfono, nunca a direcciones compartidas, registros del intermediario ni capturas de soporte. No registres mensajes WebSocket con claves.
 
-Once deployed and installed, gameplay needs no computer or home server. Do not choose another VPS location until real measurements are collected and reviewed; do not purchase or provision infrastructure without approval.
+Con servidor desplegado y app instalada no hace falta computadora ni servidor doméstico para jugar. No elijas otra ubicación de VPS hasta recopilar y revisar mediciones reales; no compres ni aprovisiones infraestructura sin aprobación.
 
-Official reference: [Dokploy domains](https://docs.dokploy.com/docs/core/domains).
+Referencia oficial: [dominios de Dokploy](https://docs.dokploy.com/docs/core/domains).

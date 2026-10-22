@@ -1,72 +1,76 @@
-# Connectivity and game-session protocol
+# Protocolo de conexión y sesiones de juego
 
-One JSON message per WebSocket frame at `/ws`. The relay binds roles to sockets; a message cannot choose another player's slot. Room codes use 8 uppercase characters from `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`. Codes are discovery, not owner credentials. The TV owns physics, goals, clock, score, readiness rules, the 60-second disconnect cancellation and match results. The relay never simulates a match or advances a clock.
+Cada cuadro WebSocket en `/ws` contiene un mensaje JSON. El servidor de enlace vincula roles a conexiones; ningún mensaje puede elegir el lugar de otro jugador. Los códigos de sala tienen 8 caracteres de `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`. Sirven para encontrar la sala, no son credenciales de propiedad. La TV decide física, goles, reloj, marcador, preparación, cancelación por ausencia de 60 segundos y resultados. El servidor no simula partidas ni avanza el reloj.
 
-## Client → relay
+## Cliente → servidor de enlace
 
-| Message | Sender / effect |
+| Mensaje | Emisor / efecto |
 |---|---|
-| `{type:"create"}` | Unassigned socket only; creates a legacy probe room and becomes its TV owner. No recovery or readiness. |
-| `{type:"createGame"}` | Unassigned socket only; creates a game room owned by this TV socket. |
-| `{type:"join",code}` | Unassigned socket; claims the first never-used slot (1 or 2). A disconnected slot is never made available to join. |
-| `{type:"resume",code,key}` | Unassigned socket; recovers the original game slot using its current credential, only after the old socket has closed. |
-| `{type:"ready"}` | Assigned game phone only; forwards `{type:"ready",slot}` to its owning TV. The same message confirms initial start, resume and rematch. |
-| `{type:"gameStatus",phase,score,remainingMs}` | Game-room TV owner only; broadcasts validated authoritative values to this room's phones. Latest status is also sent after game join/resume. |
-| `{type:"input",sequence,buttons}` | Assigned phone only. Increasing safe-integer sequence and full snapshot `{left,right,jump,kick}` of booleans. |
-| `{type:"ping",id}` | Any socket; relay answers `pong` for phone/TV ↔ relay application RTT. |
-| `{type:"probe",id}` | Phone only; relay forwards `{type:"probe",slot,id}` to its TV. |
-| `{type:"probeAck",slot,id}` | Room's owning TV only; relay forwards to the originating phone. |
+| `{type:"create"}` | Solo conexión sin asignar; crea una sala de prueba anterior y se vuelve su TV propietaria. Sin recuperación ni preparación. |
+| `{type:"createGame"}` | Solo conexión sin asignar; crea una sala de juego propiedad de esa conexión de TV. |
+| `{type:"join",code}` | Conexión sin asignar; ocupa el primer lugar nunca usado (1 o 2). Desconectar no vuelve a habilitar un lugar para entrar. |
+| `{type:"resume",code,key}` | Conexión sin asignar; recupera el lugar de juego original con su credencial vigente, solo después de cerrarse la conexión anterior. |
+| `{type:"ready"}` | Solo teléfono asignado de juego; reenvía `{type:"ready",slot}` a la TV propietaria. El mismo mensaje confirma inicio, reanudación o revancha. |
+| `{type:"gameStatus",phase,score,remainingMs}` | Solo TV propietaria de juego; envía los valores autoritativos validados a sus teléfonos. El último estado también se envía al entrar o recuperar. |
+| `{type:"input",sequence,buttons}` | Solo teléfono asignado. Secuencia creciente de enteros seguros y copia completa de booleanos `{left,right,jump,kick}`. |
+| `{type:"ping",id}` | Cualquier conexión; responde `pong` para medir RTT de aplicación teléfono/TV ↔ servidor. |
+| `{type:"probe",id}` | Solo teléfono; reenvía `{type:"probe",slot,id}` a su TV. |
+| `{type:"probeAck",slot,id}` | Solo TV propietaria; reenvía la respuesta al teléfono que inició la medición. |
 
-All messages have exactly the listed keys. Ids/sequences are nonnegative safe integers. `phase` is exactly `lobby`, `playing`, `paused`, `finished` or `cancelled`. `score` is exactly two integers, each 0–9999. `remainingMs` is an integer 0–120000. Never send a code, slot or token with `input` or `ready`. Neither controller can address another player's slot. Unknown messages still produce `invalid_message` and close with 1008.
+Cada mensaje tiene exactamente las claves indicadas. Identificadores y secuencias son enteros seguros no negativos. `phase` es exactamente `lobby`, `playing`, `paused`, `finished` o `cancelled`. `score` contiene exactamente dos enteros de 0–9999. `remainingMs` es un entero de 0–120000. Nunca envíes código, lugar ni clave con `input` o `ready`. Ningún teléfono puede dirigirse al lugar del otro. Los mensajes desconocidos siguen produciendo `invalid_message` y cierre 1008.
 
-## Relay → client
+## Servidor de enlace → cliente
 
-- `{type:"created",code}`: TV room created (both modes).
-- `{type:"joined",slot}`: assigned phone (`slot: 1 | 2`), unchanged in both modes. No secret is added to this message.
-- `{type:"resumeKey",key}`: separate message immediately after game `joined`, on first join and successful resume. Never sent to TV or other phones. Persist the rotated key before allowing another recovery.
-- `{type:"ready",slot}`: owning TV receives a readiness confirmation from this assigned game phone. The TV decides whether it applies to start, resume or rematch.
-- `{type:"gameStatus",phase,score,remainingMs}`: phones receive the TV's exact validated status. Display it; do not predict or run a local clock. There is no relay match timer.
-- `{type:"state",connected:[boolean,boolean]}`: TV sees currently connected phones; no credentials or slot recovery metadata.
-- `{type:"input",slot,sequence,buttons}`: TV receives validated snapshots. Relay-generated neutral snapshots on disconnect, lease expiry or resume may reuse the last sequence. TV must accept these neutral snapshots even when sequence repeats; relay already enforces client ordering. Resume starts a new sequence space, including zero.
-- `{type:"pong",id}`: relay echo.
-- `{type:"probe",slot,id}`: TV should reply immediately, not wait for rendering.
-- `{type:"probeAck",id}`: phone→relay→TV→relay→phone application RTT, not presentation latency.
-- `{type:"error",code}`: bounded machine code, no sensitive diagnostics.
-- `{type:"ended",reason}`: TV left or room expired; stop controls, delete this room's saved credential and enter a new room code.
+- `{type:"created",code}`: sala de TV creada, en ambos modos.
+- `{type:"joined",slot}`: teléfono asignado (`slot: 1 | 2`), igual en ambos modos. No contiene secretos.
+- `{type:"resumeKey",key}`: mensaje separado inmediatamente después de `joined` de juego, al entrar por primera vez y al recuperar. Nunca se envía a la TV ni a otros teléfonos. Guardá la clave rotada antes de permitir otra recuperación.
+- `{type:"ready",slot}`: la TV recibe la confirmación del teléfono asignado. La TV decide si aplica a inicio, reanudación o revancha.
+- `{type:"gameStatus",phase,score,remainingMs}`: el teléfono muestra los valores exactos validados de la TV, sin predecirlos ni ejecutar un reloj local. El servidor no tiene temporizador de partido.
+- `{type:"state",connected:[boolean,boolean]}`: la TV ve presencia de teléfonos, sin credenciales ni metadatos de recuperación.
+- `{type:"input",slot,sequence,buttons}`: la TV recibe controles validados. Los controles neutros generados por desconexión, vencimiento o recuperación pueden repetir la última secuencia. La TV debe aceptarlos: el servidor ya controla el orden del cliente. Recuperar inicia un espacio de secuencias nuevo, incluido cero.
+- `{type:"pong",id}`: respuesta del servidor.
+- `{type:"probe",slot,id}`: la TV debe responder inmediatamente, sin esperar al dibujado.
+- `{type:"probeAck",id}`: RTT de aplicación teléfono→servidor→TV→servidor→teléfono, no latencia hasta la presentación en pantalla.
+- `{type:"error",code}`: código de máquina acotado, sin diagnóstico sensible.
+- `{type:"ended",reason}`: la TV salió o la sala venció; detener controles, borrar la credencial de esa sala e ingresar otro código.
 
-## Game recovery and credentials
+Los nombres, tipos, fases y códigos de máquina permanecen en inglés. La interfaz los presenta en español mediante `shared/messages.ts`, sin mostrar códigos o motivos desconocidos: usa un aviso genérico en español que tampoco revela datos arbitrarios. El formateador español de RTT consulta `RttWindow.stats()` sin modificar muestras; el formateador público inglés `formatRtt` sigue disponible sin cambios.
 
-Game phones receive independent random 256-bit lowercase hexadecimal credentials (64 characters). The relay stores only SHA-256 hashes in the original room's immutable player records. A key is scoped to its room and slot, never an account or global identity. It must not appear in QR codes, query strings, logs, diagnostics, `created`, `joined`, or `state`. QR links contain only the discovery room code. Use production HTTPS/WSS.
+## Recuperación y credenciales
 
-The controller saves credentials only in `sessionStorage`, under `tv-football:resume:<ROOM>`, with a volatile in-page fallback. Storage denial/unavailability is explicitly shown: in-page recovery can still work, but reload recovery is not promised. Changing the form's room code loads only that room's credential. Reload/foreground recovery uses `resume`, never a fallback `join` into an empty slot. Session storage is browser-managed, not durable identity or proof of physical device; copied/duplicated browser-session storage can carry the credential, so do not share the tab or credential.
+Cada teléfono de juego recibe una credencial aleatoria independiente de 256 bits, representada por 64 caracteres hexadecimales en minúscula. El servidor guarda solo resúmenes SHA-256 en registros de jugador inmutables de la sala original. La clave vale solo para su sala y lugar, no es una cuenta ni identidad global. No debe aparecer en QR, parámetros de dirección, registros, diagnósticos, `created`, `joined` ni `state`. Los enlaces QR incluyen solo el código público de sala. En producción se requiere HTTPS/WSS.
 
-Successful resume atomically rotates the key once, sends the same `joined` shape followed by the new `resumeKey`, clears outstanding probes and controls, and resets the sequence counter. The old key becomes invalid immediately. Stale socket cleanup cannot neutralize or clear a replacement's state. A live or closing socket is never evicted by a valid key. If a rotated-key response is lost before the browser receives it, the old key cannot be replayed: recovery fails closed, rather than granting a second identity or joining a different slot.
+El teléfono guarda credenciales solo en `sessionStorage`, bajo `tv-football:resume:<ROOM>`, con respaldo volátil en la página. Si el almacenamiento se deniega o no está disponible, se avisa: puede funcionar la recuperación dentro de la página, pero no se promete recuperación al recargar. Cambiar el código del formulario carga solo la credencial de esa sala. Recargar o volver al primer plano usa `resume`, nunca un `join` alternativo a otro lugar. El almacenamiento lo administra el navegador; no es identidad duradera ni prueba de dispositivo físico. Duplicar/copiar una sesión puede copiar la clave: no compartas la pestaña ni la credencial.
 
-Recovery errors:
+Una recuperación exitosa rota la clave atómicamente una vez, envía `joined` con el mismo formato seguido del nuevo `resumeKey`, borra mediciones y controles pendientes y reinicia la secuencia. La clave anterior deja de valer inmediatamente. La limpieza de conexiones antiguas no puede neutralizar ni borrar el reemplazo. Una clave válida nunca expulsa una conexión viva o en cierre. Si se pierde la respuesta con la clave nueva antes de recibirla, la antigua no se reutiliza: se rechaza la recuperación en vez de conceder otra identidad o lugar.
 
-- `resume_busy`: original socket is still open/closing. Retry without eviction. This error does not assign the retry socket.
-- `resume_invalid`: wrong room mode, wrong key, revoked/replayed key. Terminal for this controller; discard this room's saved key. No token details are returned.
-- `room_unavailable`: room ended/expired/nonexistent. Terminal; discard saved key.
-- `role_locked`: an assigned socket cannot create, join or resume another role.
-- `game_phone_only`, `game_only`, `tv_only`, `not_assigned`: sender is not authorized for that operation; no forwarding occurs.
+Errores de recuperación:
 
-On game background/pagehide, the phone releases all pointers, sends a neutral snapshot and closes its socket so the TV pauses immediately when the close arrives. Leases remain a fallback. On foreground or an unexpected disconnect, recovery attempts use one-second backoff for at most 60 seconds of wall time, with no attempts while hidden. `resume_busy` may retry within that same budget; wrong keys and unavailable rooms are terminal. Controls and readiness stay disabled during recovery. Confirmations from both phones are required by the TV after returning. The relay neither cancels the match after 60 seconds nor interprets results; the TV does that. TV disconnect ends the room, with no TV recovery.
+- `resume_busy`: la conexión original sigue abierta o cerrándose; reintentar sin expulsarla. No asigna la conexión del reintento.
+- `resume_invalid`: modo incorrecto, clave incorrecta, revocada o repetida. Es definitivo para ese teléfono; borrar la clave guardada de esa sala. No devuelve detalles de la clave.
+- `room_unavailable`: sala terminada, vencida o inexistente. Definitivo; borrar la clave guardada.
+- `role_locked`: una conexión asignada no puede crear, entrar ni recuperar otro rol.
+- `game_phone_only`, `game_only`, `tv_only`, `not_assigned`: emisor sin autorización para esa operación; no se reenvía.
 
-## Safety and liveness
+Al pasar a segundo plano o recibir `pagehide`, el teléfono libera todos los toques, envía controles neutros y cierra su conexión para que la TV pause cuando detecte el cierre. La caducidad de controles sigue como respaldo. Al volver o desconectarse inesperadamente, reintenta cada segundo por un máximo de 60 segundos de tiempo real, sin intentos mientras está oculto. `resume_busy` puede reintentarse dentro del mismo plazo; claves incorrectas y salas no disponibles son definitivas. Controles y preparación permanecen desactivados durante la recuperación. La TV exige confirmación de ambos al volver. El servidor no cancela tras 60 segundos ni interpreta resultados: lo hace la TV. Desconectar la TV termina la sala, sin recuperación de TV.
 
-Maximum frame: 1,024 bytes. Rate: 80 messages per second per socket, including all new messages. Phones send full snapshots on change plus 100 ms held-input renewals. A 350 ms input lease clears held buttons at the relay; the TV also has its own 350 ms safety lease. Browser handlers cover pointer capture/up/cancel/lost capture, blur, pagehide and visibility changes. Bounded RTT maps remain diagnostic only. The TV pauses whenever either phone is absent.
+## Seguridad y continuidad
 
-Legacy probe rooms keep their original behavior: `create`, `join`, `ping`, `probe`, `probeAck`, and `input` work without credentials, readiness or recovery. Both modes reserve used slots after disconnect. A legacy phone must ask for a new TV room after disconnect; the absence of `resumeKey` identifies the probe flow.
+Máximo por cuadro: 1.024 bytes. Límite: 80 mensajes por segundo por conexión, incluidos los nuevos mensajes. El teléfono envía el estado completo al cambiar y renueva cada 100 ms mientras hay botones pulsados. El servidor libera controles tras 350 ms sin renovación; la TV aplica su propia caducidad de 350 ms. Se atienden captura/liberación/cancelación/pérdida del puntero, pérdida de foco, `pagehide` y cambios de visibilidad. Los mapas RTT acotados son solo diagnósticos. La TV pausa cuando falta cualquier teléfono.
 
-For installed-TV handshake testing, the relay optionally accepts exact opaque origin `null` (or absent Origin). Origin is defense-in-depth, not identity; room authority comes exclusively from the original socket. Existing `/ws` path/origin checks, frame/rate bounds, backpressure, socket/room capacity, handshake timeout, heartbeat, leases and room TTL apply equally to both modes. Public anonymous room creation is not a complete Internet DDoS defense.
+Las salas de prueba anteriores conservan `create`, `join`, `ping`, `probe`, `probeAck` e `input`, sin credenciales, preparación ni recuperación. Ambos modos reservan lugares usados tras desconectar. Un teléfono de prueba necesita otra sala de TV al desconectarse; la ausencia de `resumeKey` identifica ese flujo.
 
-## Real-device session checklist
+Para probar el enlace de la app instalada, el servidor puede aceptar explícitamente el origen opaco exacto `null` o ausencia de Origin. Origin es defensa adicional, no identidad: la autoridad de sala depende exclusivamente de la conexión original. Ruta `/ws`, comprobaciones de origen, tamaño/frecuencia, congestión, capacidad, plazo inicial, comprobación de actividad, caducidad de controles y duración de sala aplican a ambos modos. La creación pública anónima de salas no es una defensa completa contra ataques de denegación de servicio.
 
-- Join two game phones by QR; confirm distinct slots and require both Ready buttons before TV start.
-- Hold movement plus Jump/Kick with separate fingers. Release, cancel touch, lose capture and blur; confirm no stuck controls and diagnostics remain bounded.
-- Background a held-input phone; confirm immediate TV pause and frozen clock. Return within 60 seconds; confirm same slot, neutral controls, rotated credential and both resume confirmations.
-- Reload the same browser with session storage enabled; enter the same room code and confirm recovery rather than a new slot. Deny storage and confirm the reload-recovery warning without losing in-page recovery.
-- Try a third browser before and after a disconnect; confirm it cannot replace either reserved slot. Attempt recovery while the old socket is half-open; confirm no eviction.
-- Stay absent beyond 60 seconds; confirm the TV cancels without a winner. Finish a tied match; confirm both phones can request a rematch using the same readiness button.
-- Close the TV room; confirm saved keys are cleared, controls disable and the join form accepts a new code. A different room must never reuse another room's credential.
-- Repeat the original probe-room join/input/RTT flow; confirm no readiness UI or credential-based recovery.
+## Pruebas de sesión en dispositivos reales
+
+- Conectar dos teléfonos por QR; lugares distintos y ambos **Listo para jugar** antes de iniciar.
+- Mantener movimiento + Saltar/Patear con varios dedos. Soltar, cancelar, perder captura y foco; sin controles pegados y con diagnósticos acotados.
+- Pasar un teléfono con botones pulsados a segundo plano; pausa al detectar la ausencia y reloj congelado. Volver antes de 60 segundos; mismo lugar, controles neutros, clave rotada y confirmación de ambos.
+- Recargar el mismo navegador con almacenamiento habilitado e ingresar la misma sala: recuperar, no asignar otro lugar. Denegar almacenamiento y comprobar el aviso de limitación al recargar sin perder recuperación dentro de la página.
+- Intentar entrar con un tercer navegador antes y después de una desconexión: no reemplaza lugares. Recuperar con la conexión anterior medio abierta: no la expulsa.
+- Ausentarse más de 60 segundos: cancelación sin ganador. Terminar empatado y confirmar revancha con el mismo botón de preparación.
+- Cerrar la sala de TV: borrar claves guardadas, desactivar controles y permitir otro código. Una sala distinta nunca reutiliza la clave de otra.
+- Repetir conexión/controles/RTT de una sala de prueba anterior: sin preparación ni recuperación por credencial.
+
+La [lista completa](device-checklist.md) sigue pendiente de aceptación real.

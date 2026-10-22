@@ -1,19 +1,19 @@
-# Package and install TV Football on LG
+# Empaquetar e instalar Fútbol TV en LG
 
-The web build is not an IPK. A current webOS CLI and an authorized installation on the actual TV are separate prerequisites. The prior connectivity probe worked on the LG 55UR7800PSB; that does not establish full-game compatibility. This game's rendering, CSP and lifecycle must still be tested on that TV. Reported firmware is not evidence of its installed web engine.
+La compilación web no es un IPK. Una CLI webOS actual y una instalación autorizada en la TV real son requisitos separados. La prueba anterior de conectividad funcionó en LG 55UR7800PSB; eso no demuestra compatibilidad con el juego completo. Todavía hay que probar su dibujo, CSP y ciclo de vida en esa TV. La versión de firmware informada no demuestra qué motor web tiene instalado.
 
-## Quick path: build, then package
+## Inicio rápido: compilar y empaquetar
 
-Use the approved public relay origin, never a computer's localhost address for a real TV. Set `PUBLIC_ORIGIN=https://tvfootbal.systemautomatic.xyz` and `DEV_INSECURE=false` in the terminal ([shell syntax](development.md#quick-path)).
+Usá el origen público aprobado, nunca localhost de una computadora para una TV real. Configurá `PUBLIC_ORIGIN=https://tvfootbal.systemautomatic.xyz` y `DEV_INSECURE=false` en la terminal ([sintaxis por terminal](development.md#inicio-rápido)).
 
 ```sh
 npm run build
 npm run package:tv
 ```
 
-`package:tv` first checks `dist/tv`, then uses a project-local `node_modules/.bin/ares-package` or an installed `ares-package` in PATH, including Windows `.cmd` shims. It writes to `artifacts/` only if a CLI is available. If the CLI is absent, it exits with local setup guidance; it does not auto-install anything. No `.ipk` is implied by a successful `npm run build`.
+`package:tv` primero comprueba `dist/tv`, luego usa `node_modules/.bin/ares-package` local del proyecto o `ares-package` instalado en PATH, incluidos adaptadores `.cmd` de Windows. Escribe en `artifacts/` solo si hay una CLI. Si falta, termina con instrucciones de configuración local; no instala nada automáticamente. Un `npm run build` exitoso no implica que exista un `.ipk`.
 
-The project pins `@webos-tools/cli` as a development dependency; `npm ci` installs it locally. No global installation is required. The packaging script never installs tools itself. Do not use obsolete CLI package names or install globally without a deliberate user decision. The remaining examples assume the CLI is in PATH; for a project-local install use the corresponding `node_modules/.bin/ares-*` executable (`.cmd` on Windows). Check the installed version's actual help before operating a device:
+El proyecto fija `@webos-tools/cli` como dependencia de desarrollo; `npm ci` la instala localmente. No se requiere instalación global. El script de empaquetado nunca instala herramientas por su cuenta. No uses nombres obsoletos de paquetes CLI ni instales globalmente sin una decisión deliberada del usuario. Los ejemplos siguientes suponen la CLI en PATH; para una instalación local usá el ejecutable `node_modules/.bin/ares-*` correspondiente (`.cmd` en Windows). Consultá la ayuda real de la versión instalada antes de operar un dispositivo:
 
 ```sh
 ares-setup-device --help
@@ -23,51 +23,55 @@ ares-install --help
 ares-launch --help
 ```
 
-## Developer Mode pairing (local secrets only)
+## Vincular Developer Mode: secretos solo locales
 
-1. On the TV, sign into the official Developer Mode app locally. Enable Developer Mode, follow its restart prompts, and enable **Key Server** when obtaining the key. TV and installation computer must be on the same network.
-2. Run `ares-setup-device` interactively. Create alias `tv`, enter the TV's private address **locally**, use SSH port `9922`, user `prisoner`, and follow the installed CLI's authentication prompts. Do not store a private address, passphrase or key in this repo or chat. CLI device configuration belongs on your computer, outside the repository.
-3. Obtain the key using the official flow below; enter the TV-displayed passphrase only in the local prompt. Never place it in command arguments, scripts or committed files.
+1. En la TV, iniciá sesión localmente en la app oficial Developer Mode. Habilitá Developer Mode, seguí sus indicaciones de reinicio y habilitá **Key Server** al obtener la clave. TV y computadora de instalación deben estar en la misma red.
+2. Ejecutá `ares-setup-device` de forma interactiva. Creá el alias `tv`, ingresá la dirección privada de la TV **localmente**, usá puerto SSH `9922`, usuario `prisoner` y seguí las indicaciones de autenticación de la CLI instalada. No guardes direcciones privadas, frases de acceso ni claves en este repositorio o chat. La configuración de dispositivos pertenece a tu computadora, fuera del repositorio.
+3. Obtené la clave mediante el flujo oficial siguiente; ingresá la frase mostrada por la TV solo cuando la terminal local la solicite. Nunca la pongas en argumentos, scripts ni archivos versionados.
 
 ```sh
 ares-setup-device
 ares-novacom --device tv --getkey
 ```
 
-Pairing details vary by CLI version. Confirm actual `--help` and the official Developer Mode instructions rather than guessing options or requesting secrets.
+El procedimiento cambia según la versión de CLI. Confirmá `--help` y las instrucciones oficiales de Developer Mode; no adivines opciones ni pidas secretos.
 
-## Install and launch after explicit approval
+## Instalar y abrir solo con aprobación explícita
 
-`npm run package:tv` wraps the equivalent packaging operation:
+`npm run package:tv` envuelve la operación equivalente:
 
 ```sh
 ares-package dist/tv -o artifacts
 ```
 
-Inspect the actual generated filename. Replace `filename.ipk` below with that file; do not claim installation if packaging failed.
+Revisá el nombre real del archivo generado. Sustituí `filename.ipk` por ese archivo; no afirmes que se instaló si falló el empaquetado.
 
 ```sh
 ares-install --device tv artifacts/filename.ipk
 ares-launch --device tv com.systemautomatic.tvfootball.probe
 ```
 
-The game displays an original 1280×720 cartoon pitch, score, clock and QR plus manual controller URL/code. Both phones must press Ready; the join panel collapses during play. New room stays accessible with remote focus, without typing on the TV. Verify the entire pitch fits, labels are readable and diagnostics below the pitch remain usable. Test HTTPS certificate trust and file/opaque-origin WSS behavior; deliberately enable relay `ALLOW_TV_OPAQUE_ORIGIN=true` for the installed-app handshake test if required. Do not weaken TLS or expose insecure LAN HTTP as a workaround. `/tv/` in a browser or an emulator cannot prove installed-app compatibility.
+El juego muestra una cancha original de 1280×720, marcador, reloj y QR, más dirección y código manuales. La primera sala se crea cuando la app se vuelve visible, incluso si arrancó oculta. Si el primer intento se oculta antes de recibir la sala, se reintenta al volver. Después de crear una sala, pasar a segundo plano termina esa sala y exige **Nueva sala**; no recupera partidas automáticamente.
 
-A phone may resume its reserved slot within 60 seconds only with the same browser session's `sessionStorage` key; both players confirm again. Never share or log that key. Failed recovery may require New room. TV backgrounding, app exit or TV socket loss ends the room, not a recoverable match. On returning, use New room and rejoin both phones. See [match rules](game.md).
+Ambos teléfonos deben pulsar **Listo para jugar**; el panel de conexión se reduce durante el juego. **Nueva sala** conserva foco accesible con el control remoto, sin escribir en la TV. Verificá cancha completa, texto legible y diagnósticos accesibles debajo. Probá confianza del certificado HTTPS y enlace WSS de origen opaco/archivo; habilitá deliberadamente `ALLOW_TV_OPAQUE_ORIGIN=true` en el servidor si hace falta para esa prueba. No debilites TLS ni expongas HTTP inseguro en la red local como alternativa. `/tv/` en un navegador o emulador no demuestra compatibilidad de la app instalada.
 
-## Package contents and renewal
+Un teléfono puede recuperar su lugar antes de 60 segundos solo con la clave `sessionStorage` de la misma sesión del navegador; ambos vuelven a confirmar. Nunca compartas ni registres esa clave. Si falla, puede hacer falta **Nueva sala**. Segundo plano, salida o pérdida de conexión de TV terminan la sala, no dejan una partida recuperable. Al volver, seleccioná **Nueva sala** y conectá ambos teléfonos de nuevo. Consultá las [reglas](game.md).
 
-`dist/tv/appinfo.json` supplies the documented web-app fields: `id`, `version`, `vendor`, `type`, `main`, `title` and `icon`. ID: `com.systemautomatic.tvfootball.probe` (unchanged so the game updates the existing app without a new alias); version: `0.2.0`; title: `TV Football`; main: `index.html`; type: `web`; vendor: `Independent`. The bundled 80×80 PNG icon is original locally generated geometric artwork, not copied football branding. Assets use relative paths and bundled dependencies with no remote CDN.
+## Contenido del paquete y renovación
 
-The previous probe's observed CLI 3.2.6 packaging succeeded but warned that `requiredACG` is absent; this is not a claim that the new game IPK has been packaged or installed. This game does not call Luna APIs. The current package is for Developer Mode testing, not a store submission; record any on-device rejection and consult LG's [ACG guide](https://webostv.developer.lge.com/develop/guides/acg-guide) before changing permissions. npm also reported deprecated transitive CLI dependencies; the CLI is development-only and is omitted from the runtime image.
+`dist/tv/appinfo.json` aporta los campos documentados `id`, `version`, `vendor`, `type`, `main`, `title` e `icon`. ID: `com.systemautomatic.tvfootball.probe` (sin cambios para actualizar la app existente); versión: `0.2.1`; título: `Fútbol TV`; main: `index.html`; type: `web`; vendor: `Independent`. El icono PNG de 80×80 es arte geométrico original generado localmente, no una marca de fútbol copiada. Los recursos usan rutas relativas y dependencias incluidas, sin CDN.
 
-Check remaining Developer Mode time in its TV app and use **EXTEND before expiry**. Follow LG's current renewal prompts; do not assume a fixed session duration or that renewal is automatic. Expiry/disablement can remove or prevent running development apps; reinstall only through the authorized workflow. The computer is needed for development/pairing/installation, not for gameplay once the public relay and IPK are ready.
+La CLI 3.2.6 observada al empaquetar la prueba anterior funcionó, pero avisó que falta `requiredACG`; eso no demuestra que este nuevo IPK se haya empaquetado o instalado. El juego no llama API Luna. El paquete actual es para pruebas en Developer Mode, no para publicar en tienda; registrá cualquier rechazo en la TV y consultá la [guía ACG de LG](https://webostv.developer.lge.com/develop/guides/acg-guide) antes de cambiar permisos. npm también informó dependencias transitivas obsoletas de la CLI; esta se usa solo en desarrollo y no entra en la imagen de ejecución.
 
-## Official references and next step
+En Windows puede aparecer el aviso `DEP0190` de Node sobre argumentos con `shell: true` al usar adaptadores `.cmd`. Registralo; no lo confundas con prueba de instalación ni cambies permisos o autenticación para ocultarlo. Los comandos de este documento requieren autorización de operación del dispositivo.
 
-- [Developer Mode app, device setup and key retrieval](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
-- [Current webOS CLI guide](https://webostv.developer.lge.com/develop/tools/cli-introduction)
-- [appinfo.json fields](https://webostv.developer.lge.com/develop/references/appinfo-json)
-- [Web API and web engine support](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)
+Revisá el tiempo restante de Developer Mode en la app de TV y usá **EXTEND antes de vencer**. Seguí las indicaciones actuales de LG; no supongas una duración fija ni renovación automática. Vencimiento/desactivación pueden quitar apps de desarrollo o impedir ejecutarlas; reinstalá solo por el flujo autorizado. La computadora se necesita para desarrollar, vincular e instalar, no para jugar una vez listos servidor público e IPK.
 
-Complete the [real-device checklist](device-checklist.md) and review full-game results with the user before claiming hardware acceptance or authorizing another deployment.
+## Referencias oficiales y siguiente paso
+
+- [Developer Mode, configuración y obtención de clave](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app)
+- [Guía de CLI webOS actual](https://webostv.developer.lge.com/develop/tools/cli-introduction)
+- [Campos de appinfo.json](https://webostv.developer.lge.com/develop/references/appinfo-json)
+- [Compatibilidad de API web y motores](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)
+
+Completá la [lista con dispositivos reales](device-checklist.md) y revisá los resultados del juego completo con el usuario antes de afirmar aceptación física o autorizar otro despliegue.

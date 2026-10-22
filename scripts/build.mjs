@@ -47,8 +47,8 @@ async function main() {
     else await copyFile(join(sourceRoot, client, 'index.html'), join(output, 'index.html'));
   }
   await writeFile(resolve('dist/tv/appinfo.json'), JSON.stringify({
-    id: 'com.systemautomatic.tvfootball.probe', version: '0.2.0', vendor: 'Independent',
-    type: 'web', main: 'index.html', title: 'TV Football', icon: 'icon.png',
+    id: 'com.systemautomatic.tvfootball.probe', version: '0.2.1', vendor: 'Independent',
+    type: 'web', main: 'index.html', title: 'Fútbol TV', icon: 'icon.png',
   }, null, 2) + '\n');
   await writeFile(resolve('dist/tv/icon.png'), createIcon());
   console.log(`Built dist/controller and dist/tv for ${origin}`);

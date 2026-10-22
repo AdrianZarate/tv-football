@@ -1,12 +1,12 @@
-# TV Football
+# Fútbol TV
 
-An original two-player cartoon football game: the LG webOS TV runs the authoritative TypeScript/Phaser match, and each phone sends Left, Right, Jump and Kick through a Node.js WebSocket relay. Two goals, two-minute matches, draws and both-confirmed rematches. No accounts, AI, WebRTC, video streaming or remote CDN assets.
+Juego original de fútbol caricaturesco para dos personas. La TV LG con webOS ejecuta la partida en TypeScript/Phaser y decide la física, los goles, el reloj y el marcador. Cada teléfono envía Izquierda, Derecha, Saltar y Patear mediante un servidor de enlace WebSocket en Node.js. Hay dos arcos, partidos de dos minutos, empates y revanchas con confirmación de ambos. No hay cuentas, rivales automáticos, WebRTC, video transmitido ni recursos de CDN externos.
 
-**Validation status:** the previous connectivity probe was installed and tested with real phones; the user reported responsive independent movement. That is not validation of this new game. Full-game rendering, touch behavior and lifecycle on the installed TV still require the [real-device checklist](docs/device-checklist.md).
+**Estado de validación:** la prueba de conectividad anterior se instaló y probó con teléfonos reales; el usuario informó movimiento independiente y buena respuesta. Eso no valida el juego completo. El dibujo, los controles táctiles y el ciclo de vida en la TV instalada siguen pendientes de la [lista de pruebas con dispositivos reales](docs/device-checklist.md).
 
-## Quick path
+## Inicio rápido
 
-Use Node.js 24 and npm. These commands do not deploy or install on the TV.
+Usá Node.js 24 y npm. Estos comandos no despliegan servicios ni instalan nada en la TV.
 
 ```sh
 npm ci
@@ -15,24 +15,26 @@ npm test
 npm run build
 ```
 
-The build creates readable offline bundles in `dist/controller` and `dist/tv`, defaulting to `https://tvfootbal.systemautomatic.xyz`. Follow [local development](docs/development.md) for loopback desktop testing before starting `npm run dev`. `/` is the phone controller; `/tv/` is desktop smoke only, not installed-TV proof.
+La compilación genera paquetes web locales y legibles en `dist/controller` y `dist/tv`, con `https://tvfootbal.systemautomatic.xyz` como origen predeterminado. Seguí [desarrollo local](docs/development.md) para probar en la computadora mediante su dirección de bucle local antes de ejecutar `npm run dev`. `/` contiene los controles del teléfono; `/tv/` permite una comprobación de escritorio, pero no demuestra compatibilidad con la TV instalada.
 
-## Play and recover
+## Conectarse, jugar y volver
 
-1. Select **New room** on the TV with its remote. Join both phones using the QR or manual URL/code.
-2. Both players press **Ready to play** on their phones. TV status, score and clock are authoritative.
-3. A recognized phone disconnect freezes play and the clock. Return with the **same phone and browser session** within 60 seconds; both players must confirm resume. Another browser cannot take the reserved slot.
-4. Missing the deadline cancels without a winner. TV socket loss, TV backgrounding or exit ends the room outright: select New room, then rejoin both phones. There is no TV match recovery.
+1. Al abrir la app, la TV crea la primera sala cuando está visible. Aparecen el QR, la dirección y el código de sala. Conectá ambos teléfonos con el QR o con la dirección y el código. **Nueva sala** permite empezar otra sala con el control remoto.
+2. Ambos jugadores pulsan **Listo para jugar** en sus teléfonos. La TV determina el estado, el marcador y el reloj.
+3. Cuando se detecta la desconexión de un teléfono, se congelan el juego y el reloj. Volvé con el **mismo teléfono y la misma sesión del navegador** antes de 60 segundos; ambos jugadores deben pulsar **Confirmar reanudación**. Otro navegador no puede ocupar el lugar reservado.
+4. Si vence el plazo, el partido se cancela sin ganador. Si la TV pierde su conexión, pasa a segundo plano o se cierra, la sala termina: seleccioná **Nueva sala** y volvé a conectar los dos teléfonos. La TV no recupera partidas anteriores.
 
-Recovery keys remain in the original browser's `sessionStorage`, not the QR or URL. Do not share keys or put them in logs. Blocked storage, lost browser sessions or recovery failures may require a new room. See [match rules](docs/game.md) and [protocol](docs/protocol.md).
+Si el primer intento de conexión queda en segundo plano antes de recibir una sala creada, se cierra y vuelve a intentarse al mostrar la app. Esto solo resuelve el arranque: después de crear cualquier sala, volver al primer plano nunca recupera automáticamente la partida.
 
-## Guides and delivery boundary
+Las claves de recuperación quedan en `sessionStorage` del navegador original, no en el QR ni en la dirección. No las compartas ni las registres. Si el almacenamiento está bloqueado, se pierde la sesión del navegador o falla la recuperación, puede ser necesaria una Nueva sala. Consultá las [reglas](docs/game.md) y el [protocolo](docs/protocol.md).
 
-| Goal | Guide |
+## Guías y límites de entrega
+
+| Objetivo | Guía |
 |---|---|
-| Develop locally; configure environment | [Development](docs/development.md) |
-| Operate the HTTPS/WSS relay | [Dokploy deployment](docs/deployment.md) |
-| Package and install the LG app | [webOS setup](docs/webos.md) |
-| Verify the game on actual devices | [Real-device checklist](docs/device-checklist.md) |
+| Desarrollar localmente y configurar variables | [Desarrollo](docs/development.md) |
+| Operar el servidor HTTPS/WSS | [Despliegue con Dokploy](docs/deployment.md) |
+| Empaquetar e instalar la app LG | [Configuración webOS](docs/webos.md) |
+| Verificar el juego en dispositivos reales | [Lista de pruebas](docs/device-checklist.md) |
 
-App version `0.2.0` keeps ID `com.systemautomatic.tvfootball.probe` so it can update the existing test app. A web build is not an IPK or installation. Deployment, packaging and TV installation are separate operator actions; never auto-push, change the VPS/firewall or request secrets. No computer or additional home server is required during gameplay once the public relay and TV app are installed.
+La versión `0.2.1`, titulada `Fútbol TV`, conserva el ID `com.systemautomatic.tvfootball.probe` para actualizar la app de prueba existente. Una compilación web no es un IPK ni una instalación. El despliegue, el empaquetado y la instalación son acciones separadas del operador; no se debe publicar automáticamente, cambiar el VPS o el cortafuegos ni pedir secretos. Durante el juego no hace falta una computadora ni otro servidor en casa, una vez disponibles el servidor público y la app de TV instalada.
