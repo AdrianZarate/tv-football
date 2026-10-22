@@ -1,0 +1,15 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; color: #edf4ff; background: #0c1423; font: 22px Arial, sans-serif; }
+body { display: flex; flex-direction: column; padding: 24px 40px; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 32px; }
+h1 { font-size: 30px; margin: 0 0 12px; }
+p { margin: 9px 0; }
+#room { font: bold 42px monospace; letter-spacing: 4px; color: #ffe17b; }
+#players { margin-left: 24px; }
+#qr { background: white; padding: 4px; flex-shrink: 0; visibility: hidden; }
+#endpoint { font-size: 16px; color: #b6c8e3; }
+button { font: bold 22px Arial, sans-serif; padding: 10px 24px; border-radius: 8px; border: 2px solid #a1bcdf; background: #254267; color: white; }
+button:focus { outline: 4px solid #ffe17b; }
+#stage { flex: 1; min-height: 0; width: 100%; margin-top: 10px; }
+footer { font-size: 16px; }
+canvas { display: block; }

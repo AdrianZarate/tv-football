@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TV Football — Connectivity probe</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./main.js" defer></script>
+</head>
+<body>
+  <header>
+    <div><h1>TV Football · Connectivity probe</h1>
+      <p id="status" role="status">Starting…</p>
+      <p>Room: <strong id="room">—</strong> <span id="players">Players: 0 / 2</span></p>
+      <p>Scan the QR, or open <span id="controller-url">—</span> and enter the room code.</p>
+      <button id="new-room">New room</button>
+      <p id="endpoint"></p>
+    </div>
+    <img id="qr" alt="Controller page QR code; alternative URL and room code are displayed alongside" width="224" height="224">
+  </header>
+  <div id="stage" aria-label="Two independent controller test objects"></div>
+  <footer>
+    <p id="relay-rtt">TV ↔ relay RTT: waiting</p>
+    <p id="rendering">Rendering interval: waiting</p>
+    <p>Application RTT and render intervals are NOT button-to-screen latency. This is not the football game.</p>
+  </footer>
+</body>
+</html>
