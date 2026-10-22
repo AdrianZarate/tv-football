@@ -1,4 +1,5 @@
 import { InputTracker } from './input.js';
+import { installVisibleViewport } from './viewport.js';
 import { RoomCredentials, RetryWindow } from './session.js';
 import { RttWindow } from '../shared/metrics.js';
 import { errorMessage, endedMessage, phaseLabel, formatRttSpanish } from '../shared/messages.js';
@@ -9,7 +10,10 @@ const roomInput = document.querySelector<HTMLInputElement>('#room')!;
 const joinButton = document.querySelector<HTMLButtonElement>('#join')!;
 const readyButton = document.querySelector<HTMLButtonElement>('#ready')!;
 const status = document.querySelector<HTMLElement>('#status')!;
-const gameDisplay = document.querySelector<HTMLElement>('#game-status')!;
+const scoreP1 = document.querySelector<HTMLElement>('#score-p1')!;
+const scoreP2 = document.querySelector<HTMLElement>('#score-p2')!;
+const matchTime = document.querySelector<HTMLElement>('#match-time')!;
+const matchPhase = document.querySelector<HTMLElement>('#match-phase')!;
 const storageStatus = document.querySelector<HTMLElement>('#storage-status')!;
 const controls = [...document.querySelectorAll<HTMLButtonElement>('[data-control]')];
 const credentials = new RoomCredentials(() => window.sessionStorage, () => {
@@ -32,6 +36,14 @@ let relayRtt = new RttWindow();
 let tvRtt = new RttWindow();
 const hidden = () => document.hidden || pageHidden;
 const setStatus = (message: string) => { status.textContent = message; };
+installVisibleViewport();
+function renderGameStatus(message?: GameStatus, connection = '') {
+  const seconds = message ? Math.ceil(message.remainingMs / 1000) : 0;
+  scoreP1.textContent = message ? `P1 azul: ${message.score[0]}` : '';
+  scoreP2.textContent = message ? ` · P2 naranja: ${message.score[1]}` : '';
+  matchTime.textContent = message ? ` · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : '';
+  matchPhase.textContent = message ? ` · ${phaseLabel(message.phase)}` : connection;
+}
 function send(message: ClientMessage) {
   if (socket?.readyState !== WebSocket.OPEN) return false;
   if (socket.bufferedAmount > 16 * 1024) { socket.close(); return false; }
@@ -57,16 +69,19 @@ function updateReady() {
 }
 function disable() {
   input.reset(); slot = undefined;
+  form.hidden = false;
+  renderGameStatus();
   for (const button of controls) button.disabled = true;
   readyButton.disabled = true;
   joinButton.disabled = false;
 }
 function enable() {
   mode = 'connected'; retry.reset(); clearRetryTimer(); joinButton.disabled = true;
+  form.hidden = true; // Only a real assignment can collapse the join UI.
   clearTimeout(connectTimer); connectTimer = undefined;
   for (const button of controls) button.disabled = hidden();
   updateReady();
-  setStatus(`Jugador ${slot} conectado. ${game ? 'Confirmen que están listos en ambos teléfonos.' : 'Esperá a los dos jugadores en la TV.'}`);
+  setStatus(`Jugador ${slot} conectado (P${slot} ${slot === 1 ? 'azul' : 'naranja'}). ${game ? 'Confirmen que están listos en ambos teléfonos.' : 'Esperá a los dos jugadores en la TV.'}`);
   input.reset();
   if (game && hidden()) background();
 }
@@ -79,6 +94,7 @@ function recover() {
   clearRetryTimer();
   if (!game || !key || !roomCode) { stop('Se perdió la conexión. Pedí una nueva sala de prueba en la TV. Los lugares no se reasignan.'); return; }
   mode = 'recovering'; retry.begin(performance.now());
+  renderGameStatus(undefined, 'Reconectando…');
   if (retry.expired(performance.now())) { stop('Se agotaron los 60 segundos para volver. Revisá la TV; no se reasignó ningún lugar.'); return; }
   updateReady();
   setStatus(hidden() ? 'Partida en pausa mientras este teléfono está en segundo plano.' : 'Volviendo a conectar al jugador original… Los controles están desactivados.');
@@ -126,8 +142,7 @@ function openConnection(resuming: boolean) {
         break;
       case 'gameStatus': {
         latestStatus = message;
-        const seconds = Math.ceil(message.remainingMs / 1000);
-        gameDisplay.textContent = `${message.score[0]} – ${message.score[1]} · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} · ${phaseLabel(message.phase)}`;
+        renderGameStatus(message);
         updateReady(); // Render TV values only: no local clock or score prediction.
         break;
       }
@@ -204,7 +219,7 @@ form.addEventListener('submit', event => {
   disable(); clearRetryTimer(); detach(); retry.reset();
   storageStatus.textContent = '';
   roomCode = code; key = credentials.load(code); game = Boolean(key); latestStatus = undefined;
-  gameDisplay.textContent = ''; updateReady();
+  renderGameStatus(); updateReady();
   relayRtt = new RttWindow(); tvRtt = new RttWindow();
   mode = key ? 'recovering' : 'connecting'; joinButton.disabled = true;
   if (key) retry.begin(performance.now());

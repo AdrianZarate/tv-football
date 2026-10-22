@@ -9,12 +9,15 @@
 </head>
 <body data-phase="lobby">
   <header>
-    <strong id="score" aria-label="Marcador: P1 azul contra P2 naranja">0 – 0</strong>
+    <strong id="score" aria-label="Marcador">
+      <span id="score-p1">P1 azul: 0</span><span aria-hidden="true"> – </span><span id="score-p2">P2 naranja: 0</span>
+    </strong>
     <strong id="clock" aria-label="Tiempo restante del partido">02:00</strong>
     <button id="new-room" type="button">Nueva sala</button>
     <p id="status" role="status">Iniciando el juego…</p>
   </header>
   <main>
+    <p id="goal-banner" role="status" aria-live="polite" aria-atomic="true" hidden></p>
     <div id="stage" aria-label="Cancha original para dos jugadores: P1 azul y P2 naranja"></div>
     <aside id="join-panel" aria-label="Conectarse a esta partida">
       <h2>Conectá dos teléfonos</h2>

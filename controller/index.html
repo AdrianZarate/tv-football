@@ -8,20 +8,22 @@
   <script src="./main.js" defer></script>
 </head>
 <body>
-  <header>
-    <h1>Fútbol TV <span>· Controles</span></h1>
-    <p id="status" role="status">Ingresá el código que aparece en la TV.</p>
-  </header>
-  <form id="join-form">
-    <label for="room">Código de sala</label>
-    <input id="room" name="room" maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
-    <button id="join" type="submit">Entrar a la sala</button>
-  </form>
-  <section class="preparation" aria-label="Estado y preparación">
-    <p id="storage-status" role="status"></p>
-    <p id="game-status" aria-live="polite"></p>
-    <button id="ready" type="button" hidden disabled>Listo para jugar</button>
-  </section>
+  <div class="connection-panel">
+    <header>
+      <h1>Fútbol TV <span>· Controles</span></h1>
+      <p id="status" role="status">Ingresá el código que aparece en la TV.</p>
+    </header>
+    <form id="join-form">
+      <label for="room">Código de sala</label>
+      <input id="room" name="room" maxlength="8" minlength="8" autocapitalize="characters" autocomplete="off" spellcheck="false" required>
+      <button id="join" type="submit">Entrar a la sala</button>
+    </form>
+    <section class="preparation" aria-label="Estado y preparación">
+      <p id="storage-status" role="status"></p>
+      <p id="game-status" aria-live="polite"><span id="score-p1"></span><span id="score-p2"></span><span id="match-time"></span><span id="match-phase"></span></p>
+      <button id="ready" type="button" hidden disabled>Listo para jugar</button>
+    </section>
+  </div>
   <section id="controls" aria-label="Controles del jugador">
     <div class="movement" role="group" aria-label="Movimiento">
       <button type="button" data-control="left" aria-label="Izquierda" disabled><span class="direction-icon" aria-hidden="true">←</span> <span class="control-label">Izquierda</span></button>
@@ -33,7 +35,7 @@
     </div>
   </section>
   <details><summary>Ayuda y conexión</summary>
-    <p>Usá varios dedos: mantené el movimiento mientras pulsás Saltar o Patear.</p>
+    <p>Usá varios dedos: mantené el movimiento mientras pulsás Saltar o Patear. El marcador siempre muestra P1 azul a la izquierda y P2 naranja a la derecha; tu jugador aparece en el aviso de conexión.</p>
     <p>Las salas de juego reservan tu lugar en esta sesión del navegador. Si volvés dentro de 60 segundos, ambos deben confirmar la reanudación; también deben confirmar una revancha. Conservá esta pestaña: otro navegador no puede reemplazarte. La TV controla el marcador y el reloj.</p>
     <p>Las salas de prueba anteriores no tienen botón de preparación ni recuperación; creá otra sala de prueba después de desconectarte.</p>
     <p>Teléfono ↔ servidor: <span id="relay-rtt">Esperando muestras</span></p>

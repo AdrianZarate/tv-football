@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
+import { readFile } from 'node:fs/promises';
+import type { MatchOptions } from '../game/model.js';
 
 class Events {
   private listeners = new Map<string, ((event: any) => void)[]>();
@@ -23,11 +25,22 @@ class Element extends Events {
 }
 
 // Bundle the actual entrypoint: only Phaser, QR and browser platform dependencies are mocked.
-export async function entryBundle(entry = 'tv/main.ts', root = process.cwd()) {
+export async function entryBundle(entry = 'tv/main.ts', root = process.cwd(), options?: MatchOptions) {
   return (await build({
     absWorkingDir: root, entryPoints: [entry], bundle: true, write: false, platform: 'browser', format: 'iife',
     define: { __PUBLIC_ORIGIN__: JSON.stringify('https://tvfootbal.systemautomatic.xyz') },
     plugins: [{ name: 'platform', setup(build) {
+      // Supply the existing public host fixture API; transport and model remain real.
+      if (options) {
+        build.onResolve({ filter: /^\.\/host\.js$/ }, () => ({ path: 'host', namespace: 'fixture' }));
+        build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ resolveDir: root, contents: `
+          import { FootballHost as Host } from './tv/host.ts';
+          export { describeMatch, formatClock } from './tv/host.ts';
+          export class FootballHost extends Host {
+            constructor(send, now) { super(send, now, ${JSON.stringify(options)}); }
+          }
+        ` }));
+      }
       build.onResolve({ filter: /^(phaser|qrcode)$/ }, args => ({ path: args.path, namespace: 'platform' }));
       build.onLoad({ filter: /.*/, namespace: 'platform' }, args => ({ contents: `export default globalThis.${args.path === 'phaser' ? 'Phaser' : 'QRCode'};` }));
     } }],
@@ -94,11 +107,27 @@ export function browser(bundle: string, initiallyHidden = false, search = '') {
       return event;
     },
     visible(hidden: boolean) { document.hidden = hidden; document.emit('visibilitychange'); },
+    elapse(milliseconds: number) { now += milliseconds; },
     frame(milliseconds = 0) { now += milliseconds; scene.update(); },
     canvas: () => labels.map(label => label.text).join('\n'),
   };
 }
 const bundle = await entryBundle();
+const goalBundles = await Promise.all([1, 2].map(slot => entryBundle('tv/main.ts', process.cwd(), {
+  initialState: { ball: { x: slot === 1 ? 1240 : 40, y: 580, vx: slot === 1 ? 800 : -800 } },
+})));
+function assertScore(h: ReturnType<typeof browser>, p1: number, p2: number) {
+  assert.equal(h.element('#score-p1').textContent, `P1 azul: ${p1}`);
+  assert.equal(h.element('#score-p2').textContent, `P2 naranja: ${p2}`);
+}
+function playingGoal(slot: 1 | 2) {
+  const h = browser(goalBundles[slot - 1]!);
+  const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] });
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  h.frame(10);
+  return { h, ws };
+}
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
 const created = (ws: ReturnType<typeof browser>['sockets'][number], code = 'ABCD2345') => {
   ws.open(); ws.message({ type: 'created', code });
@@ -201,7 +230,7 @@ test('stale QR rejection cannot replace fresh join instructions; current failure
 test('actual TV keeps one Spanish DOM HUD for lobby, play, pause, rematch and cancellation; no canvas labels', () => {
   const h = browser(bundle); const ws = h.sockets[0]!; created(ws); h.frame();
   assert.equal(h.canvas(), ''); assert.match(h.element('#status').textContent, /Conectá dos teléfonos.*P1 sin conexión/);
-  assert.equal(h.element('#score').textContent, '0 – 0');
+  assertScore(h, 0, 0);
   ws.message({ type: 'state', connected: [true, true] }); ws.message({ type: 'ready', slot: 1 }); h.frame();
   assert.match(h.element('#status').textContent, /P1 listo.*P2 esperando/);
   ws.message({ type: 'ready', slot: 2 }); h.frame(); assert.match(h.element('#status').textContent, /P1 azul.*P2 naranja/);
@@ -291,15 +320,113 @@ test('drawing is capped without forcing Canvas; idle HUD phase writes and hidden
   assert.equal(h.config.width, 1280); assert.equal(h.config.height, 720); assert.equal(h.config.scale.zoom, 1);
   assert.equal(h.config.input.keyboard, false);
   const writes = h.phaseWrites();
-  const hud = ['#clock', '#score', '#status'].map(id => h.element(id));
+  const hud = ['#clock', '#score-p1', '#score-p2', '#status', '#goal-banner'].map(id => h.element(id));
   const textWrites = hud.map(element => element.textWrites);
   for (let i = 0; i < 10; i++) h.frame(10);
   assert.equal(h.phaseWrites(), writes);
   assert.deepEqual(hud.map(element => element.textWrites), textWrites);
-  assert.equal(h.element('#score').textContent, '0 – 0');
+  assertScore(h, 0, 0);
   for (const tick of h.intervals) tick();
   assert.equal(h.element('#rendering').textContent, '');
   assert.equal(h.element('#relay-rtt').textContent, '');
+});
+
+test('TV markup keeps labelled colors in global P1/P2 order and an accessible nonblocking DOM banner', async () => {
+  const html = await readFile('tv/index.html', 'utf8');
+  const css = await readFile('tv/style.css', 'utf8');
+  assert.match(html, /id="score-p1"[^>]*>P1 azul: 0<\/span>[\s\S]*id="score-p2"[^>]*>P2 naranja: 0<\/span>/);
+  assert.match(html, /id="goal-banner"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"[^>]*hidden/);
+  assert.match(css, /#score-p1\s*\{[^}]*#389dff/i);
+  assert.match(css, /#score-p2\s*\{[^}]*#ff9845/i);
+  assert.match(css, /#goal-banner\s*\{[^}]*pointer-events:\s*none/);
+});
+
+for (const slot of [1, 2] as const) test(`actual goal at P${slot}'s target announces the credited player once for 1200 ms while clock runs`, () => {
+  const { h, ws } = playingGoal(slot);
+  const banner = h.element('#goal-banner');
+  assertScore(h, slot === 1 ? 1 : 0, slot === 2 ? 1 : 0);
+  assert.equal(banner.textContent, `¡GOOOLLL! P${slot} ${slot === 1 ? 'azul' : 'naranja'}`);
+  assert.equal(banner.hidden, false);
+  assert.equal(h.document.body.dataset.phase, 'playing');
+  assert.equal(ws.sent[ws.sent.length - 1].remainingMs, 119990);
+  const writes = banner.textWrites;
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'state', connected: [true, true] });
+  h.frame(0); h.frame(1199);
+  assert.equal(banner.textWrites, writes, 'repeated status/frame updates must not announce again');
+  assert.equal(banner.hidden, false);
+  h.frame(1);
+  assert.equal(banner.hidden, true); assert.equal(banner.textContent, '');
+  assert.equal(h.element('#clock').textContent, '01:59');
+  assert.equal(h.intervals.length, 1, 'no extra polling timer for the banner');
+  assert.equal(h.textureCreations(), 9); assert.equal(h.canvas(), '');
+  h.frame(118789); assert.equal(h.document.body.dataset.phase, 'playing');
+  h.frame(1); assert.equal(h.document.body.dataset.phase, 'finished');
+  assert.equal(h.element('#clock').textContent, '00:00');
+  assert.equal(banner.hidden, true);
+});
+
+test('a score increase settled by disconnect still announces its credited player without changing pause rules', () => {
+  const h = browser(goalBundles[0]!); const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] });
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  h.elapse(10);
+  ws.message({ type: 'state', connected: [false, true] });
+  assert.equal(h.document.body.dataset.phase, 'paused');
+  assert.equal(h.element('#goal-banner').textContent, '¡GOOOLLL! P1 azul');
+  h.frame(1200); assert.equal(h.element('#goal-banner').hidden, true);
+  assert.equal(h.element('#clock').textContent, '02:00');
+});
+
+for (const slot of [1, 2] as const) test(`P${slot} own goal announces the opponent, never the last kicker`, async () => {
+  const ownGoalBundle = await entryBundle('tv/main.ts', process.cwd(), { initialState: {
+    players: slot === 1 ? [{ x: 180 }, {}] : [{}, { x: 1100 }],
+    ball: { x: slot === 1 ? 115 : 1165, y: 622 },
+  } });
+  const h = browser(ownGoalBundle); const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] });
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  ws.message({ type: 'input', slot, sequence: 1, buttons: { left: slot === 1, right: slot === 2, jump: false, kick: true } });
+  h.frame(100);
+  assertScore(h, slot === 1 ? 0 : 1, slot === 1 ? 1 : 0);
+  assert.equal(h.element('#goal-banner').textContent, `¡GOOOLLL! ${slot === 1 ? 'P2 naranja' : 'P1 azul'}`);
+  assert.equal(h.element('#goal-banner').hidden, false);
+  assert.equal(ws.sent[ws.sent.length - 1].remainingMs, 119900);
+});
+
+for (const boundary of ['new room', 'ended', 'visibility', 'expiry', 'cancelled'] as const) test(`${boundary} clears a live goal banner and stale frames never restore it`, () => {
+  const { h, ws } = playingGoal(1);
+  if (boundary === 'new room') h.element('#new-room').emit('click');
+  else if (boundary === 'ended') ws.message({ type: 'ended', reason: 'room_expired' });
+  else if (boundary === 'visibility') h.visible(true);
+  else if (boundary === 'expiry') h.frame(119990);
+  else { ws.message({ type: 'state', connected: [false, true] }); h.frame(60000); }
+  assert.equal(h.element('#goal-banner').hidden, true);
+  assert.equal(h.element('#goal-banner').textContent, '');
+  h.frame(0);
+  assert.equal(h.element('#goal-banner').hidden, true);
+  if (boundary === 'expiry') {
+    ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+    assertScore(h, 0, 0);
+    assert.equal(h.element('#goal-banner').hidden, true);
+    assert.equal(h.element('#clock').textContent, '02:00');
+    h.frame(10); assertScore(h, 0, 0);
+  }
+  if (boundary === 'new room') {
+    created(h.sockets[1]!, 'EFGH6789');
+    ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ended', reason: 'room_expired' });
+    assertScore(h, 0, 0); assert.equal(h.element('#goal-banner').hidden, true);
+  }
+});
+
+test('readiness, networking and forged phone gameStatus never create an announcement or a score', () => {
+  const h = browser(bundle); const ws = h.sockets[0]!; created(ws);
+  assertScore(h, 0, 0); assert.equal(h.element('#goal-banner').hidden, true);
+  ws.message({ type: 'state', connected: [true, true] }); ws.message({ type: 'ready', slot: 1 });
+  ws.message({ type: 'pong', id: 1 }); h.frame(50);
+  assertScore(h, 0, 0); assert.equal(h.element('#goal-banner').textContent, '');
+  ws.message({ type: 'gameStatus', phase: 'playing', score: [99, 88], remainingMs: 120000 });
+  assertScore(h, 0, 0); assert.equal(h.element('#goal-banner').hidden, true);
+  assert.equal(h.document.body.dataset.phase, 'lobby'); assert.equal(ws.closed, 0);
 });
 
 test('TV unknown error and ended strings never leak; malformed input cannot publish game state', () => {

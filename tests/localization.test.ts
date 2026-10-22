@@ -54,7 +54,8 @@ test('TV and phone static markup is Spanish, accessible and explains diagnostics
   }
   const tv = await readFile('tv/index.html', 'utf8');
   assert.match(tv, /Nueva sala/); assert.match(tv, /código de sala/); assert.match(tv, /aria-label="Tiempo restante/);
-  assert.match(tv, /id="score" aria-label="Marcador:/);
+  assert.match(tv, /id="score" aria-label="Marcador"/);
+  assert.match(tv, /id="score-p1">P1 azul: 0/); assert.match(tv, /id="score-p2">P2 naranja: 0/);
   assert.match(tv, /<footer id="diagnostics" hidden>/);
   assert.ok(!tv.includes('id="players"'), 'readiness belongs only to the status HUD');
   const phone = await readFile('controller/index.html', 'utf8');
@@ -63,13 +64,20 @@ test('TV and phone static markup is Spanish, accessible and explains diagnostics
 
 async function controller() {
   class Element {
-    textContent = ''; value = ''; hidden = false; disabled = false; dataset: Record<string, string> = {};
+    private text = ''; children: Element[] = [];
+    get textContent(): string { return this.text + this.children.map(child => child.textContent).join(''); }
+    set textContent(value: string) { this.text = value; this.children = []; }
+    style = { setProperty(_name: string, _value: string) {} };
+    value = ''; hidden = false; disabled = false; dataset: Record<string, string> = {};
     listeners = new Map<string, Function[]>();
     addEventListener(name: string, fn: Function) { this.listeners.set(name, [...(this.listeners.get(name) ?? []), fn]); }
     emit(name: string) { for (const fn of this.listeners.get(name) ?? []) fn({ preventDefault() {} }); }
   }
   const elements = new Map<string, Element>();
   const el = (id: string) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id)!; };
+  const html = await readFile('controller/index.html', 'utf8');
+  const hud = html.match(/<p\b[^>]*id="game-status"[^>]*>([\s\S]*?)<\/p>/)![1]!;
+  el('#game-status').children = [...hud.matchAll(/<span\b[^>]*id="([^"]+)"/g)].map(match => el(`#${match[1]}`));
   const controls = ['left', 'right', 'jump', 'kick'].map(control => { const button = new Element(); button.dataset.control = control; return button; });
   const sockets: Socket[] = []; const saved = new Map<string, string>(); const intervals: Function[] = [];
   class Socket extends Element {
@@ -81,8 +89,8 @@ async function controller() {
   }
   const bundle = (await build({ entryPoints: ['controller/main.ts'], bundle: true, write: false, format: 'iife', platform: 'browser' })).outputFiles[0]!.text;
   runInNewContext(bundle, {
-    document: Object.assign(new Element(), { hidden: false, querySelector: el, querySelectorAll: () => controls }),
-    window: Object.assign(new Element(), { sessionStorage: { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => saved.set(key, value), removeItem: (key: string) => saved.delete(key) } }),
+    document: Object.assign(new Element(), { hidden: false, documentElement: new Element(), querySelector: el, querySelectorAll: () => controls }),
+    window: Object.assign(new Element(), { innerHeight: 844, requestAnimationFrame: (_fn: Function) => 1, sessionStorage: { getItem: (key: string) => saved.get(key) ?? null, setItem: (key: string, value: string) => saved.set(key, value), removeItem: (key: string) => saved.delete(key) } }),
     location: { protocol: 'https:', host: 'tvfootbal.systemautomatic.xyz', hostname: 'tvfootbal.systemautomatic.xyz', search: '' },
     WebSocket: Socket, TextEncoder, URLSearchParams, performance: { now: () => 0 }, setInterval: (fn: Function) => intervals.push(fn), setTimeout: () => 1, clearTimeout() {},
   });
@@ -103,16 +111,16 @@ test('actual phone entry renders Spanish phases, readiness, diagnostics and safe
     ['paused', 'En pausa', 'Confirmar reanudación'], ['finished', 'Finalizado', 'Listo para la revancha'], ['cancelled', 'Cancelado', 'Listo para jugar'],
   ]) {
     ws.message({ type: 'gameStatus', phase, score: [1, 2], remainingMs: 61000 });
-    assert.equal(h.el('#game-status').textContent, `1 – 2 · 1:01 · ${label}`); assert.equal(h.el('#ready').textContent, button);
+    assert.equal(h.el('#game-status').textContent, `P1 azul: 1 · P2 naranja: 2 · 1:01 · ${label}`); assert.equal(h.el('#ready').textContent, button);
     assert.equal(h.el('#ready').disabled, phase === 'playing' || phase === 'cancelled');
   }
   for (const fn of h.intervals) fn();
   assert.match(h.el('#relay-rtt').textContent, /muestras=.*última.*variación.*esperas agotadas/);
   assert.match(h.el('#tv-rtt').textContent, /muestras=/);
-  const before = { saved: [...h.saved], sent: [...ws.sent], display: h.el('#game-status').textContent };
+  const before = { saved: [...h.saved], sent: [...ws.sent] };
   ws.message({ type: 'gameStatus', phase: 'playing', score: [-1, 2], remainingMs: 0 });
   assert.equal(h.el('#status').textContent, 'Mensaje del servidor no válido. Revisá la sala en la TV.');
-  assert.deepEqual([...h.saved], before.saved); assert.equal(h.el('#game-status').textContent, before.display);
+  assert.deepEqual([...h.saved], before.saved); assert.equal(h.el('#game-status').textContent, '');
   // Rejection preserves data but the existing safety shutdown sends one neutral release.
   assert.deepEqual(ws.sent.slice(0, -1), before.sent);
   assert.deepEqual(ws.sent[ws.sent.length - 1], { type: 'input', sequence: 3, buttons: { left: false, right: false, jump: false, kick: false } });

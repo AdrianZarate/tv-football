@@ -16,6 +16,16 @@ Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados
 - [ ] Solo marcador, reloj y estado esenciales en la vista principal; QR/dirección/código legibles cuando hacen falta. Diagnóstico técnico oculto salvo modo explícito `?debug=1`; no mide carga de CPU/GPU ni latencia del volumen. Ver [límites de la optimización](tv-performance.md).
 - [ ] En Android e iPhone, revisar grupos de movimiento y acciones, alcance de ambos pulgares y botones de al menos 64 píxeles lógicos, vertical y horizontal. Probar pulsaciones simultáneas, soltar y cancelar; los avisos de conexión/preparación no deben quedar ocultos. Ver [diseño de controles](controller-layout.md).
 
+## Comprobar el pulido 0.2.3
+
+- [ ] En Android e iPhone, con barras del navegador expandidas y contraídas, revisar vertical y horizontal: los cuatro botones de juego deben quedar dentro del área visible sin desplazar la página. La conexión/ayuda pueden desplazarse internamente; probar también teclado, orientación y ampliación sin desactivar zoom.
+- [ ] Durante cambios de tamaño/barras, no se debe perder el lugar, cambiar la clave ni enviar pulsaciones por sí solo. Probar movimiento más patada, liberación, cancelación y recuperación de la sesión.
+- [ ] Al terminar o perder la sala, el mando no debe seguir diciendo **En juego** con datos antiguos; preparación y errores deben ser claros.
+- [ ] Identificar **P1 azul** y **P2 naranja** en TV y teléfonos. Arco derecho suma a P1; arco izquierdo a P2, incluso en gol en contra. Cada cruce válido suma una vez.
+- [ ] Cada gol muestra **¡GOOOLLL!** con el jugador acreditado durante unos 1,2 segundos; el reloj sigue y no se bloquean controles. Revancha, Nueva sala y cierre no deben mostrar anuncios viejos ni anunciar el reinicio a cero.
+- [ ] Probar movimiento más rápido/preciso, salto más útil, rebotes moderados y patada consistente. Registrar si la sensación resulta divertida y controlable; no darla por probada solo porque pasan tests.
+- [ ] Confirmar que volumen y OK/Nueva sala mantienen la respuesta aceptada en 0.2.2.
+
 ## Registrar el entorno
 
 No guardes direcciones privadas, cuentas, frases de acceso ni claves en Git. Ocultá datos sensibles en capturas y registros antes de compartir.

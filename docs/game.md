@@ -11,7 +11,7 @@ Juego original de fútbol de vista lateral para exactamente dos personas. P1 es 
 
 Ambos teléfonos deben estar conectados y **ambos jugadores deben pulsar Listo para jugar** para empezar. El reloj comienza en 2:00, avanza solo durante el juego y termina al completar dos minutos de tiempo activo. Gana quien tiene más goles; con igual marcador hay empate, sin tiempo extra. Ambos pueden confirmar una revancha, que reinicia reloj, marcador, pelota y jugadores.
 
-Un gol cuenta solo cuando toda la pelota cruza el límite lateral dentro de la boca del arco. El punto es para el jugador contrario. Cada gol reinicia de forma conjunta la pelota, los jugadores y los controles para el saque, sin reiniciar el reloj ni volver a puntuar en el siguiente cuadro. Por encima del travesaño, la pelota rebota contra el límite lateral. La pelota tiene gravedad, rebotes en suelo/techo y colisiones con cuerpo/cabeza; los jugadores no pueden atravesarse ni salir de la cancha.
+Un gol cuenta solo cuando toda la pelota cruza el límite lateral dentro de la boca del arco. El arco derecho suma siempre a **P1 azul** y el izquierdo a **P2 naranja**, incluso si el último toque fue un gol en contra. El marcador de TV mantiene siempre el orden global **P1 azul a la izquierda, P2 naranja a la derecha**: no indica de quién es el arco cercano. Cada gol reinicia de forma conjunta la pelota, los jugadores y los controles para el saque, sin reiniciar el reloj ni volver a puntuar en el siguiente cuadro. Por encima del travesaño, la pelota rebota contra el límite lateral. La pelota tiene gravedad, rebotes en suelo/techo y colisiones con cuerpo/cabeza; los jugadores no pueden atravesarse ni salir de la cancha.
 
 La desconexión de un teléfono pausa inmediatamente la física y el reloj, y borra los controles y las confirmaciones de ambos jugadores. El teléfono ausente tiene 60 segundos para volver. Cuando están ambos, se retira el plazo, pero **ambos deben pulsar Confirmar reanudación**. Otra desconexión mientras se espera confirmación inicia un nuevo plazo de 60 segundos; reconexiones parciales durante una ausencia en curso nunca lo extienden. Al vencer, la cancelación es definitiva y no hay ganador, aunque uno vaya adelante. Creá una Nueva sala después de cancelar. Una desconexión en la espera inicial no inicia una partida ni un plazo de cancelación.
 
@@ -29,6 +29,10 @@ Los valores usan píxeles lógicos y segundos, no dependen de la resolución del
 | Seguridad | Velocidad total de pelota limitada a 1400 px/s antes de integrar y después de contactos; física en subpasos de hasta 1/120 s y límite de 100 ms por cuadro, sin recortar el reloj. |
 
 Se priorizan precisión, rodadura predecible y rebotes moderados; no se agregan ajustes ni poderes. Que resulte **divertido necesita comentarios de usuarios reales**: una prueba unitaria demuestra resultados deterministas, no diversión ni respuesta física del dispositivo.
+
+## Marcador y anuncio de gol en TV
+
+Un único marcador DOM identifica cada número con texto y color, sin depender de emojis ni de fuentes externas. Al aumentar realmente el marcador del modelo autoritativo, aparece **«¡GOOOLLL! P1 azul»** o **«¡GOOOLLL! P2 naranja»** según quién recibe el punto, también en goles en contra. Dura 1200 ms del reloj monotónico de actualización, no captura toques ni detiene controles o el reloj del partido. Cuadros repetidos, confirmaciones y mensajes de red sin un gol no repiten el anuncio. Nueva sala, reinicio/decremento del marcador, revancha y fin/cancelación lo limpian. No hay una fase de gol ni temporizadores adicionales; la escena cacheada no crea textos, geometría ni texturas por gol.
 
 ## API de integración con la TV
 
@@ -80,7 +84,7 @@ El texto usa Arial / sans-serif disponible localmente mediante el lienzo de Phas
 
 ## Verificación y pruebas reales
 
-Modelo determinista: `node --import tsx --test tests/game.test.ts`. TypeScript: `npm run typecheck`.
+Modelo, goles, TV y renderizado: `node --import tsx --test tests/goals-physics.test.ts tests/game.test.ts tests/tv-game.test.ts tests/tv-ui.test.ts tests/render.test.ts`. TypeScript: `npm run typecheck`.
 
 En la app instalada con dos teléfonos reales:
 
@@ -89,7 +93,7 @@ En la app instalada con dos teléfonos reales:
 3. Soltá, cancelá un toque y pasá un teléfono a segundo plano; comprobá que no queden controles activos y que al detectarse la ausencia se congelen partida y reloj.
 4. Volvé antes de 60 segundos; ambos deben confirmar y se deben conservar física y reloj.
 5. Desconectá ambos, reconectá solo uno repetidamente y verificá que el plazo original cancele sin ganador, incluso con marcador desigual.
-6. Marcá en ambos arcos, golpeá por encima del travesaño y hacé rebotar en jugador/cabeza/suelo; debe haber un punto y un saque por gol.
+6. Marcá en ambos arcos y en contra: derecha suma P1 azul; izquierda, P2 naranja. Comprobá los números etiquetados y el anuncio breve del jugador acreditado, sin detener el reloj. Golpeá por encima del travesaño y hacé rebotar en jugador/cabeza/suelo; debe haber un punto y un saque por gol.
 7. Completá dos minutos, comprobá ganador o empate sin tiempo extra; una revancha confirmada por ambos empieza 0–0 y 2:00.
 8. Comprobá FIT en la resolución real, arcos completos, colores distinguibles, texto legible, arte local, ausencia de errores CSP y respuesta aceptable.
 

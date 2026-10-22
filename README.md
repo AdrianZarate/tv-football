@@ -19,6 +19,10 @@ La compilación genera paquetes web locales y legibles en `dist/controller` y `d
 
 ## Conectarse, jugar y volver
 
+El mando adapta su altura al área visible del navegador; la conexión y la ayuda pueden desplazarse internamente, pero los botones de juego están diseñados para quedar visibles sin desplazar la página. Verificá barras del navegador, teclado y orientación en ambos teléfonos: las pruebas de software no reemplazan esa comprobación.
+
+El marcador identifica **P1 azul** a la izquierda y **P2 naranja** a la derecha, también en los teléfonos. P1 anota en el arco derecho y P2 en el izquierdo. **¡GOOOLLL!** anuncia durante 1,2 segundos al jugador que recibe el punto, sin detener el reloj. La física se ajustó al estilo ágil y controlable; la sensación de juego requiere tu prueba real.
+
 1. Al abrir la app, la TV crea la primera sala cuando está visible. Aparecen el QR, la dirección y el código de sala. Conectá ambos teléfonos con el QR o con la dirección y el código. **Nueva sala** permite empezar otra sala con el control remoto.
 2. Ambos jugadores pulsan **Listo para jugar** en sus teléfonos. La TV determina el estado, el marcador y el reloj.
 3. Cuando se detecta la desconexión de un teléfono, se congelan el juego y el reloj. Volvé con el **mismo teléfono y la misma sesión del navegador** antes de 60 segundos; ambos jugadores deben pulsar **Confirmar reanudación**. Otro navegador no puede ocupar el lugar reservado.

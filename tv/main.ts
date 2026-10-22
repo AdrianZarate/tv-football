@@ -15,11 +15,16 @@ const roomLabel = document.querySelector<HTMLElement>('#room')!;
 const qr = document.querySelector<HTMLImageElement>('#qr')!;
 const button = document.querySelector<HTMLButtonElement>('#new-room')!;
 const clock = document.querySelector<HTMLElement>('#clock')!;
-const score = document.querySelector<HTMLElement>('#score')!;
+const scoreP1 = document.querySelector<HTMLElement>('#score-p1')!;
+const scoreP2 = document.querySelector<HTMLElement>('#score-p2')!;
+const goalBanner = document.querySelector<HTMLElement>('#goal-banner')!;
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 document.querySelector<HTMLElement>('#diagnostics')!.hidden = !debug;
 let socket: WebSocket | undefined;
 let generation = 0;
+let displayedScore: [number, number] = [0, 0];
+let goalGeneration = 0;
+let goalUntil = 0;
 let diagnosticId = 0;
 let relayRtt = new RttWindow();
 let lastMessage = 0;
@@ -44,11 +49,29 @@ function send(message: ClientMessage) {
 function text(element: HTMLElement, value: string) {
   if (element.textContent !== value) element.textContent = value;
 }
+function clearGoal() {
+  goalUntil = 0;
+  goalBanner.hidden = true;
+  text(goalBanner, '');
+}
 function renderStatus() {
   const state = host.snapshot();
+  const now = performance.now();
   text(clock, formatClock(state.remainingMs));
-  text(score, `${state.score[0]} – ${state.score[1]}`);
-  if (code) text(status, describeMatch(state, performance.now()));
+  text(scoreP1, `P1 azul: ${state.score[0]}`);
+  text(scoreP2, `P2 naranja: ${state.score[1]}`);
+  const reset = goalGeneration !== generation || state.score.some((value, index) => value < displayedScore[index]!)
+    || state.phase === 'lobby' || state.phase === 'finished' || state.phase === 'cancelled';
+  if (reset) clearGoal();
+  else if (code && state.score.some((value, index) => value > displayedScore[index]!)) {
+    // Only the authoritative model's credited score matters, never last touch or network text.
+    text(goalBanner, `¡GOOOLLL! ${state.score[0] > displayedScore[0] ? 'P1 azul' : 'P2 naranja'}`);
+    goalBanner.hidden = false;
+    goalUntil = now + 1200;
+  } else if (now >= goalUntil) clearGoal();
+  displayedScore = [...state.score];
+  goalGeneration = generation;
+  if (code) text(status, describeMatch(state, now));
   // Collapse only once play begins. The full logical pitch is always visible, never cropped.
   if (document.body.dataset.phase !== state.phase) document.body.dataset.phase = state.phase;
 }
