@@ -3,26 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TV Football — Connectivity probe</title>
+  <title>TV Football</title>
   <link rel="stylesheet" href="./style.css">
   <script src="./main.js" defer></script>
 </head>
-<body>
+<body data-phase="lobby">
   <header>
-    <div><h1>TV Football · Connectivity probe</h1>
-      <p id="status" role="status">Starting…</p>
-      <p>Room: <strong id="room">—</strong> <span id="players">Players: 0 / 2</span></p>
-      <p>Scan the QR, or open <span id="controller-url">—</span> and enter the room code.</p>
-      <button id="new-room">New room</button>
-      <p id="endpoint"></p>
-    </div>
-    <img id="qr" alt="Controller page QR code; alternative URL and room code are displayed alongside" width="224" height="224">
+    <div class="heading"><h1>TV Football</h1><span id="players">P1 offline · P2 offline</span></div>
+    <strong id="clock" aria-label="Match time remaining">02:00</strong>
+    <button id="new-room" type="button">New room</button>
+    <p id="status" role="status">Starting game…</p>
   </header>
-  <div id="stage" aria-label="Two independent controller test objects"></div>
+  <main>
+    <div id="stage" aria-label="Original two-player football pitch; blue P1 and orange P2"></div>
+    <aside id="join-panel" aria-label="Join this game">
+      <h2>Join with two phones</h2>
+      <img id="qr" alt="Controller QR; manual URL and room code are below" width="224" height="224">
+      <p>Room <strong id="room">—</strong></p>
+      <p id="controller-url">—</p>
+      <p id="join-help">Scan on each phone, or open the URL and enter the room code.</p>
+      <p>Both players press <strong>Ready</strong> on their phones. The TV owns the clock and score.</p>
+    </aside>
+  </main>
   <footer>
-    <p id="relay-rtt">TV ↔ relay RTT: waiting</p>
-    <p id="rendering">Rendering interval: waiting</p>
-    <p>Application RTT and render intervals are NOT button-to-screen latency. This is not the football game.</p>
+    <details>
+      <summary>Connection diagnostics</summary>
+      <p id="relay-rtt">TV ↔ relay application RTT: waiting</p>
+      <p id="rendering">Rendering interval: waiting</p>
+      <p>Application RTT and scene update intervals are NOT button-to-screen latency.</p>
+      <p id="endpoint"></p>
+    </details>
   </footer>
 </body>
 </html>

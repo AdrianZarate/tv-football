@@ -5,6 +5,7 @@ RUN npm ci
 COPY scripts ./scripts
 COPY controller ./controller
 COPY tv ./tv
+COPY game ./game
 COPY shared ./shared
 ARG PUBLIC_ORIGIN=https://tvfootbal.systemautomatic.xyz
 ENV PUBLIC_ORIGIN=${PUBLIC_ORIGIN} DEV_INSECURE=false

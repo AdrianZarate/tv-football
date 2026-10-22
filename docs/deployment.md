@@ -1,6 +1,6 @@
 # Deploy the relay with Dokploy
 
-Deploy only after explicit user approval. These are operator instructions, not evidence of a completed deployment. No account credentials, VPS changes or firewall changes are required in this repository.
+Deploy only after explicit user approval, using the user-approved ref. These are operator instructions, not an automatic push or evidence of a completed game deployment. The previous connectivity version was validated; the new full game still needs actual-device acceptance. Never request account credentials or make VPS/firewall changes as part of local validation.
 
 ## Quick path
 
@@ -46,10 +46,14 @@ smoke.onmessage = event => { console.log(event.data); smoke.close(); };
 smoke.onerror = () => console.error('WSS smoke failed');
 ```
 
-Expect `{"type":"pong","id":1}` and an upgraded `101` connection in the Network inspector. If it fails, inspect DNS, certificate chain, proxy upgrade routing and relay Origin configuration; do not paste sensitive logs into chat. `/tv/` can check two-browser connectivity but is **desktop smoke only**, not installed-TV proof. A proxy healthcheck alone does not establish WSS correctness.
+Expect `{"type":"pong","id":1}` and an upgraded `101` connection in the Network inspector. If it fails, inspect DNS, certificate chain, proxy upgrade routing and relay Origin configuration; do not paste sensitive logs into chat. `/tv/` can check the game with two browser controllers pressing Ready, but is **desktop smoke only**, not installed-TV proof. A proxy healthcheck alone does not establish WSS correctness.
 
 ## Next gate
 
-Package the TV with the same public origin using [webOS instructions](webos.md), then complete the [device checklist](device-checklist.md). Once deployed and installed, gameplay needs no computer or home server. Do not choose another VPS location until real measurements are collected and reviewed; do not purchase or provision infrastructure without approval.
+Package the TV with the same public origin using [webOS instructions](webos.md), then complete the [device checklist](device-checklist.md). Update both TV and controller/relay from the approved game revision: the old probe's controls are not the full-game acceptance gate. The TV owns physics, goals, score and clock; the VPS only validates and relays bounded messages. See [match rules](game.md).
+
+Phone disconnection pauses the match for up to 60 seconds, with same-browser reserved-slot recovery and both-player confirmation. TV backgrounding, TV connection loss or a relay restart ends the room; there is no TV recovery promise. Users may need New room after failures. Resume keys belong only in the phone browser's `sessionStorage`, never in shared URLs, proxy logs or support screenshots. Do not log WebSocket payloads containing keys.
+
+Once deployed and installed, gameplay needs no computer or home server. Do not choose another VPS location until real measurements are collected and reviewed; do not purchase or provision infrastructure without approval.
 
 Official reference: [Dokploy domains](https://docs.dokploy.com/docs/core/domains).

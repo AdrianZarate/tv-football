@@ -1,6 +1,6 @@
-# Package and install the LG connectivity probe
+# Package and install TV Football on LG
 
-The web build is not an IPK. A current webOS CLI and an authorized installation on the actual TV are separate prerequisites. Installed-app compatibility remains pending until tested on the LG 55UR7800PSB; the reported firmware is not evidence of its installed web engine.
+The web build is not an IPK. A current webOS CLI and an authorized installation on the actual TV are separate prerequisites. The prior connectivity probe worked on the LG 55UR7800PSB; that does not establish full-game compatibility. This game's rendering, CSP and lifecycle must still be tested on that TV. Reported firmware is not evidence of its installed web engine.
 
 ## Quick path: build, then package
 
@@ -51,13 +51,15 @@ ares-install --device tv artifacts/filename.ipk
 ares-launch --device tv com.systemautomatic.tvfootball.probe
 ```
 
-The app displays a QR plus manual controller URL/code and two simple objects, not a football match. Test HTTPS certificate trust and file/opaque-origin WSS behavior; deliberately enable relay `ALLOW_TV_OPAQUE_ORIGIN=true` for the installed-app handshake test if required. Do not weaken TLS or expose insecure LAN HTTP as a workaround. `/tv/` in a browser or an emulator cannot prove installed-app compatibility.
+The game displays an original 1280×720 cartoon pitch, score, clock and QR plus manual controller URL/code. Both phones must press Ready; the join panel collapses during play. New room stays accessible with remote focus, without typing on the TV. Verify the entire pitch fits, labels are readable and diagnostics below the pitch remain usable. Test HTTPS certificate trust and file/opaque-origin WSS behavior; deliberately enable relay `ALLOW_TV_OPAQUE_ORIGIN=true` for the installed-app handshake test if required. Do not weaken TLS or expose insecure LAN HTTP as a workaround. `/tv/` in a browser or an emulator cannot prove installed-app compatibility.
+
+A phone may resume its reserved slot within 60 seconds only with the same browser session's `sessionStorage` key; both players confirm again. Never share or log that key. Failed recovery may require New room. TV backgrounding, app exit or TV socket loss ends the room, not a recoverable match. On returning, use New room and rejoin both phones. See [match rules](game.md).
 
 ## Package contents and renewal
 
-`dist/tv/appinfo.json` supplies the documented web-app fields: `id`, `version`, `vendor`, `type`, `main`, `title` and `icon`. ID: `com.systemautomatic.tvfootball.probe`; version: `0.1.0`; title: `TV Football Probe`; main: `index.html`; type: `web`; vendor: `Independent`. The bundled 80×80 PNG icon is original locally generated geometric artwork, not copied football branding. Assets use relative paths and bundled dependencies with no remote CDN.
+`dist/tv/appinfo.json` supplies the documented web-app fields: `id`, `version`, `vendor`, `type`, `main`, `title` and `icon`. ID: `com.systemautomatic.tvfootball.probe` (unchanged so the game updates the existing app without a new alias); version: `0.2.0`; title: `TV Football`; main: `index.html`; type: `web`; vendor: `Independent`. The bundled 80×80 PNG icon is original locally generated geometric artwork, not copied football branding. Assets use relative paths and bundled dependencies with no remote CDN.
 
-The observed CLI 3.2.6 packaging succeeded but warned that `requiredACG` is absent. This probe does not call Luna APIs. The current package is for Developer Mode testing, not a store submission; record any on-device rejection and consult LG's [ACG guide](https://webostv.developer.lge.com/develop/guides/acg-guide) before changing permissions. npm also reported deprecated transitive CLI dependencies; the CLI is development-only and is omitted from the runtime image.
+The previous probe's observed CLI 3.2.6 packaging succeeded but warned that `requiredACG` is absent; this is not a claim that the new game IPK has been packaged or installed. This game does not call Luna APIs. The current package is for Developer Mode testing, not a store submission; record any on-device rejection and consult LG's [ACG guide](https://webostv.developer.lge.com/develop/guides/acg-guide) before changing permissions. npm also reported deprecated transitive CLI dependencies; the CLI is development-only and is omitted from the runtime image.
 
 Check remaining Developer Mode time in its TV app and use **EXTEND before expiry**. Follow LG's current renewal prompts; do not assume a fixed session duration or that renewal is automatic. Expiry/disablement can remove or prevent running development apps; reinstall only through the authorized workflow. The computer is needed for development/pairing/installation, not for gameplay once the public relay and IPK are ready.
 
@@ -68,4 +70,4 @@ Check remaining Developer Mode time in its TV app and use **EXTEND before expiry
 - [appinfo.json fields](https://webostv.developer.lge.com/develop/references/appinfo-json)
 - [Web API and web engine support](https://webostv.developer.lge.com/develop/specifications/web-api-and-web-engine)
 
-Complete the [real-device checklist](device-checklist.md) and review results with the user before any full-game implementation.
+Complete the [real-device checklist](device-checklist.md) and review full-game results with the user before claiming hardware acceptance or authorizing another deployment.

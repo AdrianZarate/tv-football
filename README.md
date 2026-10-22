@@ -1,10 +1,12 @@
-# TV Football connectivity probe
+# TV Football
 
-Validate an installed LG webOS app with two phone browsers before building the football game. The TV runs a TypeScript/Phaser movement probe; phones send independent controls through a Node.js WebSocket relay. The relay neither simulates the game nor streams video. No WebRTC is used.
+An original two-player cartoon football game: the LG webOS TV runs the authoritative TypeScript/Phaser match, and each phone sends Left, Right, Jump and Kick through a Node.js WebSocket relay. Two goals, two-minute matches, draws and both-confirmed rematches. No accounts, AI, WebRTC, video streaming or remote CDN assets.
+
+**Validation status:** the previous connectivity probe was installed and tested with real phones; the user reported responsive independent movement. That is not validation of this new game. Full-game rendering, touch behavior and lifecycle on the installed TV still require the [real-device checklist](docs/device-checklist.md).
 
 ## Quick path
 
-Use Node.js 24 and npm. No deployment or TV installation is performed by these commands.
+Use Node.js 24 and npm. These commands do not deploy or install on the TV.
 
 ```sh
 npm ci
@@ -13,22 +15,24 @@ npm test
 npm run build
 ```
 
-The build creates readable, offline-bundled assets in `dist/controller` and `dist/tv`. It defaults to `https://tvfootbal.systemautomatic.xyz`. For a loopback-only desktop smoke test, follow [local development](docs/development.md) before starting `npm run dev`.
+The build creates readable offline bundles in `dist/controller` and `dist/tv`, defaulting to `https://tvfootbal.systemautomatic.xyz`. Follow [local development](docs/development.md) for loopback desktop testing before starting `npm run dev`. `/` is the phone controller; `/tv/` is desktop smoke only, not installed-TV proof.
 
-## Next steps
+## Play and recover
+
+1. Select **New room** on the TV with its remote. Join both phones using the QR or manual URL/code.
+2. Both players press **Ready to play** on their phones. TV status, score and clock are authoritative.
+3. A recognized phone disconnect freezes play and the clock. Return with the **same phone and browser session** within 60 seconds; both players must confirm resume. Another browser cannot take the reserved slot.
+4. Missing the deadline cancels without a winner. TV socket loss, TV backgrounding or exit ends the room outright: select New room, then rejoin both phones. There is no TV match recovery.
+
+Recovery keys remain in the original browser's `sessionStorage`, not the QR or URL. Do not share keys or put them in logs. Blocked storage, lost browser sessions or recovery failures may require a new room. See [match rules](docs/game.md) and [protocol](docs/protocol.md).
+
+## Guides and delivery boundary
 
 | Goal | Guide |
 |---|---|
 | Develop locally; configure environment | [Development](docs/development.md) |
-| Deploy relay behind HTTPS/WSS | [Dokploy deployment](docs/deployment.md) |
+| Operate the HTTPS/WSS relay | [Dokploy deployment](docs/deployment.md) |
 | Package and install the LG app | [webOS setup](docs/webos.md) |
-| Record TV, Android and iPhone evidence | [Real-device checklist](docs/device-checklist.md) |
-| Understand messages and safety limits | [Protocol](docs/protocol.md) |
+| Verify the game on actual devices | [Real-device checklist](docs/device-checklist.md) |
 
-`/` is the controller. `/tv/` is a desktop smoke-test view, not proof of installed-TV compatibility. A webOS CLI is required separately to produce an `.ipk`; a successful web build is not a package or an installation. Real-device compatibility and responsiveness remain pending.
-
-## Boundary and review gate
-
-The prototype moves two objects and measures application RTT. It does not implement football physics, goals, matches, ties, readiness or rematches. Slots remain reserved after disconnection; there is no reconnection feature. Create a new room after a disconnect.
-
-**Stop before the full game:** review the completed device checklist and measurements with the user. Do not deploy, change the VPS/firewall, provision infrastructure, or install on the TV without explicit approval. Never put credentials, device passphrases or private keys in chat or this repository. After the public relay is deployed and the IPK installed, gameplay requires only the TV, phones and Internet—not a development computer or home server.
+App version `0.2.0` keeps ID `com.systemautomatic.tvfootball.probe` so it can update the existing test app. A web build is not an IPK or installation. Deployment, packaging and TV installation are separate operator actions; never auto-push, change the VPS/firewall or request secrets. No computer or additional home server is required during gameplay once the public relay and TV app are installed.

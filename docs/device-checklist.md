@@ -1,12 +1,12 @@
-# Real-device connectivity review gate
+# Real-device full-game review gate
 
-Run only after authorized HTTPS deployment and IPK installation. Capture actual LG TV + Android + iPhone evidence. Desktop browsers, emulators and automated tests do not establish TV compatibility or acceptable latency.
+Run only after authorized HTTPS deployment and IPK installation. Capture actual LG TV + Android + iPhone evidence. The previous connectivity probe was validated and reported responsive; the new full game remains pending actual-device acceptance. Desktop browsers, headless adapter tests, emulators and build success do not establish TV compatibility or acceptable latency. See [match rules](game.md).
 
 ## Quick path
 
 1. Record the environment below; put all three devices on the same Wi-Fi and use the deployed public relay.
-2. Join both phones, exercise controls/lifecycle failures, and collect idle/load measurements for each phone.
-3. Review results with the user. **Do not build the full football game until the user approves this milestone.**
+2. Join both phones, confirm readiness, play complete matches, exercise recovery/lifecycle failures and collect idle/load measurements for each phone.
+3. Review the new game's results with the user. **Do not claim full-game hardware acceptance from the earlier probe.**
 
 ## Record the environment
 
@@ -31,13 +31,27 @@ Do not infer the engine from reported firmware. Record missing facts as unknown.
 
 - [ ] Launch the installed app. Check valid TLS/certificate trust, WSS upgrade and file/opaque-origin handshake. Record any need for the explicit `ALLOW_TV_OPAQUE_ORIGIN` relay flag; production stays HTTPS/WSS.
 - [ ] QR opens the HTTPS controller; separately test manual URL plus room-code entry on both phones.
-- [ ] Android and iPhone receive distinct slots and move only their own object. Both objects pause until both phones are connected.
+- [ ] The full original 1280×720 pitch fits without cropping: two goals, blue P1, orange P2, readable score and clock. No CSP errors, remote assets or missing artwork.
+- [ ] Android and iPhone receive distinct slots and control only their own player. Connected alone does not start play; both must press Ready on their phones. TV shows P1/P2 readiness.
+- [ ] The join panel collapses during play, leaving the full pitch visible; QR/manual join instructions remain available when needed. New room has visible remote focus and requires no TV text entry.
 - [ ] A third browser/device cannot replace either player. A room code cannot impersonate the existing TV socket.
 - [ ] New room on TV changes the room; old controllers cannot control it. Join both phones again deliberately.
 
+## Match rules and recovery
+
+- [ ] Both players Ready starts at 0–0 and 02:00. Test left/right plus simultaneous jump/kick. Check body/head/floor collisions and both goal mouths.
+- [ ] Score through each goal; check exactly one point to the correct player and one kickoff reset, with the clock preserved. Above-crossbar hits do not score.
+- [ ] Complete 120 seconds of active play. Clock uses ceiling seconds, down to 00:00. Higher score wins; tied score displays DRAW with no overtime.
+- [ ] Finished screen shows result and each player's rematch readiness. One confirmation alone does not restart; both reset score, clock and kickoff.
+- [ ] Disconnect a phone while playing. Once recognized, physics and match clock freeze; TV shows the 60-second reconnect deadline countdown and clears both readiness states.
+- [ ] Return within the deadline with the same phone and original browser session. Slot stays the same; a new browser with only the room code cannot replace it. Both players must confirm resume before clock/physics advance.
+- [ ] When both are back, TV waits for both confirmations without counting down a missing-phone deadline. A new dropout starts a fresh 60-second wait; reconnecting only one during an existing outage does not extend it.
+- [ ] Leave a phone missing for the full 60-second recognized-disconnect window, including when one player leads. Match cancels with no winner, remains frozen and requires New room.
+- [ ] Losing the saved browser session or denied storage gives clear recovery feedback; failed recovery may require New room. Resume keys stay in the original browser's `sessionStorage`, never in QR/URLs, shared screenshots or logs.
+
 ## Touch and lifecycle matrix
 
-Repeat every row on **both** phones, observing both TV objects. Record pass/fail and details, not just whether the page loaded.
+Repeat every row on **both** phones, observing both TV players. Record pass/fail and details, not just whether the page loaded.
 
 | Action | Android result | iPhone result |
 |---|---|---|
@@ -52,9 +66,9 @@ Repeat every row on **both** phones, observing both TV objects. Record pass/fail
 | Wi-Fi off during hold; restore network | | |
 | TV app background, return, relaunch and New room | | |
 
-Expected: releases/cancellations clear affected controls; no stuck movement/action. On a half-open connection, held inputs clear after the 350 ms safety lease (plus timer scheduling), without waiting for heartbeat. Full phone disconnection recognition can take up to about 20 seconds via relay heartbeat; both objects pause when absence is recognized. Lease expiry clears controls, not slot connection state. Record observed delays rather than promising an exact wall-clock deadline. TV-side liveness checks may stop its session sooner.
+Expected: releases/cancellations clear affected controls; no stuck movement/action. On a half-open connection, held inputs clear after the 350 ms safety lease (plus timer scheduling), without waiting for heartbeat. Full phone disconnection recognition can take up to about 20 seconds via relay heartbeat; the match and clock pause when absence is recognized, then the 60-second recovery deadline begins. Lease expiry clears controls, not slot connection state. Record observed delays rather than promising an exact wall-clock deadline. TV-side liveness checks may stop its session sooner.
 
-Slots stay reserved after disconnect; returning/reloading does not reclaim them. There is **no reconnect feature**: create a new room and join both phones again. Verify room expiry at the default 30-minute TTL (or document a deliberately configured shorter test TTL); return to the default afterward.
+Phone slots remain reserved: only the original browser session's key can resume that player, including reload within that session. Closing the whole browser session may lose it. Another browser cannot replace the slot. TV app backgrounding, exit, TV socket loss or liveness failure ends the current room entirely; returning does **not** recover the match. Select New room and join both phones again. Verify old-room controllers receive an end notice and cannot control the new match. Verify room expiry at the default 30-minute TTL (or document a deliberately configured shorter test TTL); return to the default afterward.
 
 ## Measure RTT honestly
 
@@ -86,6 +100,6 @@ The full phone→relay→TV→relay→phone probe ACK is sent **before drawing**
 | Two-phone safety and lifecycle results | |
 | Idle/load RTT and perceived responsiveness | |
 | Accept current route or investigate alternatives | |
-| User approval before full game | |
+| Full-game rules, readiness, rematch and recovery acceptance | |
 
-**Stop here until the user reviews the real-device results.** If the VPS route is inadequate, propose a better-latency location based on measurements only; do not purchase, provision or modify infrastructure without approval. Final football rules, tied matches and reconnection policy remain deferred. No computer or extra home server should be needed during gameplay once the relay and TV app are installed.
+**Stop here until the user reviews the real-device results.** Record failures honestly; the earlier probe does not satisfy this game gate. If the VPS route is inadequate, propose a better-latency location based on measurements only; do not purchase, provision or modify infrastructure without approval. No computer or extra home server should be needed during gameplay once the relay and TV app are installed.

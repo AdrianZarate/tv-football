@@ -1,15 +1,24 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; color: #edf4ff; background: #0c1423; font: 22px Arial, sans-serif; }
-body { display: flex; flex-direction: column; padding: 24px 40px; }
-header { display: flex; justify-content: space-between; align-items: center; gap: 32px; }
-h1 { font-size: 30px; margin: 0 0 12px; }
-p { margin: 9px 0; }
-#room { font: bold 42px monospace; letter-spacing: 4px; color: #ffe17b; }
-#players { margin-left: 24px; }
-#qr { background: white; padding: 4px; flex-shrink: 0; visibility: hidden; }
-#endpoint { font-size: 16px; color: #b6c8e3; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; color: #edf4ff; background: #0c1423; font: 20px Arial, sans-serif; }
+body { display: flex; flex-direction: column; padding: 16px 28px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; flex-shrink: 0; }
+h1 { font-size: 28px; margin: 0 24px 0 0; display: inline; }
+h2 { font-size: 24px; margin: 0 0 12px; }
+p { margin: 8px 0; }
+.heading { flex: 1; }
+#players { font-size: 20px; }
+#clock { font: bold 36px monospace; color: #fff3b0; }
+#status { width: 100%; margin: 0; min-height: 48px; font-size: 22px; }
 button { font: bold 22px Arial, sans-serif; padding: 10px 24px; border-radius: 8px; border: 2px solid #a1bcdf; background: #254267; color: white; }
-button:focus { outline: 4px solid #ffe17b; }
-#stage { flex: 1; min-height: 0; width: 100%; margin-top: 10px; }
-footer { font-size: 16px; }
+button:focus, summary:focus { outline: 4px solid #ffe17b; outline-offset: 2px; }
+main { display: flex; flex: 1; min-height: 0; gap: 24px; margin-top: 8px; }
+#stage { flex: 1; min-width: 0; height: 100%; overflow: hidden; }
+#join-panel { width: 288px; padding: 12px; flex-shrink: 0; overflow-y: auto; background: #172940; border-radius: 10px; }
+#room { display: block; font: bold 34px monospace; letter-spacing: 3px; color: #ffe17b; }
+#qr { display: block; background: white; padding: 4px; visibility: hidden; }
+#controller-url { font-size: 19px; overflow-wrap: anywhere; color: #bdebea; }
+#join-help { font-size: 18px; }
+body[data-phase="playing"] #join-panel { display: none; }
+footer { flex-shrink: 0; padding-top: 8px; font-size: 16px; }
+summary { cursor: pointer; padding: 4px; }
 canvas { display: block; }
