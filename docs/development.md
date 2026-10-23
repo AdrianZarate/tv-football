@@ -62,9 +62,17 @@ La TV instalada no puede usar localhost de esta computadora. Probá su comportam
 - Los recursos de TV usan rutas relativas. Su CSP generada permite solo el `/ws` configurado, scripts/estilos locales e imágenes locales/data para el QR. No se usa `unsafe-eval` ni `unsafe-inline`: el gestor de escala de Phaser asigna propiedades de estilo individuales, no bloques en línea.
 - `PUBLIC_ORIGIN` queda compilado en la TV y su CSP. Cambiarlo requiere volver a compilar, empaquetar e instalar la app; cambiar solo variables del servidor no alcanza.
 - `npm run package:tv` requiere `dist/tv` y una CLI webOS instalada explícitamente. Consultá [webOS](webos.md). Nunca descarga ni instala herramientas automáticamente.
-- Los metadatos generados tienen versión `0.2.3`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente.
+- Los metadatos generados tienen versión `0.2.4`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente.
 - Las pruebas de compilación ejecutan los scripts públicos en directorios temporales nuevos del sistema y los quitan al terminar. `node --import tsx --test tests/build.test.ts` comprueba compilación/empaquetado.
 - `node --import tsx --test tests/tv-game.test.ts` comprueba el adaptador público con tiempo virtual y conexiones reales locales de servidor/teléfonos. No ejecuta Phaser en un navegador ni demuestra compatibilidad de TV. El adaptador avanza antes de dibujar; física, marcador y tiempo siguen bajo autoridad de la TV.
 - `node --import tsx --test tests/tv-ui.test.ts tests/localization.test.ts` ejecuta las entradas reales con plataformas simuladas y comprueba arranque oculto, límites de visibilidad, aislamiento de eventos antiguos y texto español. No reemplaza la prueba física.
+
+## Comprobar los cambios de 0.2.4
+
+- Mandos: grupos de movimiento/acciones para ambos pulgares, diseño adaptable y fondo estático coherente con el estadio. Revisá 320 píxeles de ancho en vertical, horizontal de poca altura y escritorio; barras, teclado, zonas seguras, ayuda y varios dedos. Conservá zoom y navegación por teclado. El diseño no demuestra comodidad ni ausencia de desplazamiento en teléfonos reales.
+- Física: rebotes mucho mayores con restitución 0,92 (antes 0,55), sin cambiar las acciones disponibles. Probá la pelota apretada entre jugadores en ambas direcciones, al empujar ambos y al soltar; no debe atravesar cuerpos, pero sí pasar bajo un jugador si el salto deja espacio. Verificá cruce de pelota completa, ambos arcos, gol en contra y anuncio sin bloquear el reloj.
+- Fondos: estadio más elaborado dibujado una vez en la textura existente y mando con decoración estática. Revisá contraste de pelota/jugadores/arcos y avisos; no deduzcas FPS de TV ni diversión de los tests. Volumen y OK/Nueva sala deben conservar su respuesta.
+
+La evidencia de navegador de 0.2.3 es histórica, no prueba del código 0.2.4. Las comprobaciones de navegador y las pruebas físicas nuevas siguen siendo necesarias; usá la [lista de dispositivos](device-checklist.md#comprobar-los-cambios-024).
 
 Consultá el [protocolo](protocol.md) para caducidad de controles, lugares reservados y mensajes acotados. La prueba anterior de conectividad se validó en dispositivos; este juego completo todavía no tiene aceptación física. El siguiente paso es la [lista de dispositivos](device-checklist.md), incluido dibujo/CSP, foco del control remoto y recuperación.

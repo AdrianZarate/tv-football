@@ -18,6 +18,8 @@ Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados
 
 ## Comprobar el pulido 0.2.3
 
+Referencia histórica: conservá estos criterios y cualquier evidencia de navegador de 0.2.3 como resultados de esa versión, no como prueba del código 0.2.4. El rebote moderado de esta sección describe el ajuste anterior, no el objetivo nuevo.
+
 - [ ] En Android e iPhone, con barras del navegador expandidas y contraídas, revisar vertical y horizontal: los cuatro botones de juego deben quedar dentro del área visible sin desplazar la página. La conexión/ayuda pueden desplazarse internamente; probar también teclado, orientación y ampliación sin desactivar zoom.
 - [ ] Durante cambios de tamaño/barras, no se debe perder el lugar, cambiar la clave ni enviar pulsaciones por sí solo. Probar movimiento más patada, liberación, cancelación y recuperación de la sesión.
 - [ ] Al terminar o perder la sala, el mando no debe seguir diciendo **En juego** con datos antiguos; preparación y errores deben ser claros.
@@ -25,6 +27,27 @@ Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados
 - [ ] Cada gol muestra **¡GOOOLLL!** con el jugador acreditado durante unos 1,2 segundos; el reloj sigue y no se bloquean controles. Revancha, Nueva sala y cierre no deben mostrar anuncios viejos ni anunciar el reinicio a cero.
 - [ ] Probar movimiento más rápido/preciso, salto más útil, rebotes moderados y patada consistente. Registrar si la sensación resulta divertida y controlable; no darla por probada solo porque pasan tests.
 - [ ] Confirmar que volumen y OK/Nueva sala mantienen la respuesta aceptada en 0.2.2.
+
+## Comprobar los cambios 0.2.4
+
+**Estado: T4 bloqueada por decisión humana sobre prueba visual no disponible; T5 bloqueada por publicación/instalación del operador y aceptación física pendientes.** El usuario debe elegir una sola vía: autorizar publicación 0.2.4 para inspección visual manual, o esperar reparación del navegador. Ninguna está seleccionada. La aprobación previa correspondía solo a 0.2.3; no autoriza publicar 0.2.4 ni ejecutar más verificaciones.
+
+Completá esta sección con la versión nueva solo tras despliegue e instalación autorizados. El código y las pruebas automáticas no prueban comodidad física, ausencia de desplazamiento en teléfonos reales, FPS de TV ni diversión.
+
+### Evidencia existente, no aceptación física
+
+- Padre: suite final 174/174 y tipos sin errores. Verificación independiente inicial 142/142 + tipos, seguida de un bloqueo de salto; tras la corrección acotada, código actual 10/10 sondas de salto original/espejado, límites estrictos y caducidad, y 28/28 contactos, salida 0 sin stderr. Bloqueo resuelto; fallos iniciales de suite/preparación temporal quedan como historia. Fuente validada e inmutable después: `b25b3f2f8f76fccafc31b67565a728a1e2573f3a`.
+- Padre: job 3 regeneró HTTPS de producción, IPK 0.2.4 con ID de app sin cambios y preview loopback; sustituye el job 2 obsoleto previo a la corrección. Docker local `tv-football-polish-024:local` con `--network none`: salud HTTP 200, cuerpo exacto `{"ok":true}`, salida 0. Avisos requiredACG/DEP0190 conocidos sin cambios. No hubo publicación ni instalación.
+- Rondas 01/02 del padre: salida 0. Lectura del `artifacts/browser-responsive-stadium-0.2.4/results.json` existente: `success: true`, espacio 6; ocho tamaños/alturas, ayuda abierta y tres fases de horizontal corto. Cuatro botones ≥64, dentro del área visible, hit-test verdadero, sin desbordamiento ni scroll de página, formulario oculto y controles antes de ayuda; marcador global P1 azul 7/P2 naranja 9. Dos toques CDP izquierda + salto llegaron por WebSocket real, se mantuvieron durante 650→600 visibles y se liberaron a neutro. Ver [etiquetas exactas y límites](controller-layout.md). Es Chromium emulado con VisualViewport sustituido, no barras/teclado/fingers físicos ni iPhone.
+- Ronda 03: única captura TV-first fallida, salida 1 tras unos 17 segundos por `CdpRequestTimeoutError` en `Page.captureScreenshot`, antes de intentar teléfono y sin alcanzar el límite exterior de 45 segundos. Solo se midió el lienzo Phaser real: lógico 1280 × 720, rectángulo 1072 × 603 en x28/y206, viewport 1440 × 900 DPR1, fase Lobby. Sin imagen ni veredicto visual 0.2.4, sin reintento ni alternativa. Espacio Ego 6 p1 teléfono/p2 TV conservado por el error; servidor loopback propio del padre (job 4) detenido.
+- Evaluación final del padre: riesgo medio + escalamiento ítem 3, `reviewDue: false`, sin revisión nativa iniciada. T1–T3 están terminadas como código, no como aceptación visual/física. Los commits locales serán del padre, con pruebas/docs completas por comportamiento: física (~423 líneas, sobre la recomendación de 400 para conservar todas las regresiones de salto), mando (~253), estadio cacheado (~253), metadatos/evidencia. Sin staging parcial de pruebas ni publicación automática.
+
+- [ ] En Android e iPhone, probar vertical de 320 píxeles lógicos de ancho, horizontal de poca altura y también navegador de escritorio. Registrar área visible y orientación: grupos para ambos pulgares, cuatro acciones y botones de al menos 64 píxeles lógicos; confirmar que todos sean alcanzables sin desplazar la página y anotar si resultan cómodos.
+- [ ] Repetir con barras del navegador expandidas/contraídas, teclado abierto/cerrado y zonas seguras (muescas/indicador de inicio). Ayuda/conexión deben poder desplazarse internamente sin tapar controles. Conservar ampliación y navegación por teclado; no exigir orientación fija.
+- [ ] Probar varios dedos: movimiento + salto + patada, liberación independiente, salida del botón y cancelación. Girar/redimensionar con botones pulsados; no deben quedar entradas pegadas ni cambiar lugar/credenciales. Cortar y restaurar Wi-Fi; recuperar con la misma sesión dentro del plazo y confirmar ambos, sin compartir claves. Repetir la matriz táctil completa de abajo.
+- [ ] Apretar la pelota entre los dos jugadores: corredor contra rival quieto, ambos empujando, mantener presión y soltar, repitiendo en ambas direcciones. No debe atravesar cuerpos ni salir disparada a una posición lejana. Saltar y confirmar que pase por debajo solo cuando haya espacio real.
+- [ ] Comparar los rebotes mucho mayores (restitución 0,92 frente a 0,55) en suelo, paredes y jugadores; registrar sensación y control sin darlos por aceptados. Confirmar pelota completa dentro del arco para puntuar, ausencia de gol sobre el travesaño, gol en contra acreditado al rival y un único punto por cruce. **¡GOOOLLL!** debe acreditar al jugador correcto sin detener reloj ni controles.
+- [ ] Revisar fondos estáticos más ricos y coherentes en estadio y mando: pelota, jugadores, arcos, marcador, reloj y avisos deben seguir siendo legibles. No confundir detalle estático con evidencia de rendimiento en TV. Repetir volumen/silenciar y OK/Nueva sala con sala abierta y jugando, comparando con la respuesta anterior.
 
 ## Registrar el entorno
 

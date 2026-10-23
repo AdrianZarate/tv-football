@@ -73,7 +73,7 @@ test('builds default endpoint, offline bundles, restrictive TV CSP and webOS met
     assert.ok(js.includes(defaultOrigin));
     assert.ok(!js.includes('__PUBLIC_ORIGIN__'));
     assert.deepEqual(JSON.parse(await readFile(join(cwd, 'dist/tv/appinfo.json'), 'utf8')), {
-      id: 'com.systemautomatic.tvfootball.probe', version: '0.2.3', vendor: 'Independent',
+      id: 'com.systemautomatic.tvfootball.probe', version: '0.2.4', vendor: 'Independent',
       type: 'web', main: 'index.html', title: 'Fútbol TV', icon: 'icon.png',
     });
     const icon = await readFile(join(cwd, 'dist/tv/icon.png'));
