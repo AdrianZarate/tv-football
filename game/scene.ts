@@ -79,29 +79,102 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawPitch(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillStyle(0x172940).fillRect(0, 0, FIELD.width, FIELD.height);
-    graphics.fillStyle(0x8bd3e6).fillRect(0, FIELD.top, FIELD.width, FIELD.floor - FIELD.top);
-    // Clouds, stands and a low skyline are hand-built shapes, not image assets.
-    graphics.fillStyle(0xe3f8ff, 0.8);
-    for (const x of [170, 530, 1000]) {
-      graphics.fillCircle(x, 190, 32).fillCircle(x + 33, 180, 40).fillCircle(x + 68, 195, 27);
-    }
-    graphics.fillStyle(0x5398ad).fillRect(FIELD.left, 395, FIELD.right - FIELD.left, 85);
-    graphics.fillStyle(0xb9e3df);
-    for (let x = 90; x < FIELD.right; x += 40) {
-      graphics.fillCircle(x, 418, 8).fillCircle(x + 15, 447, 8);
-    }
-    graphics.fillStyle(0x34835a).fillRect(0, FIELD.floor, FIELD.width, FIELD.height - FIELD.floor);
-    graphics.fillStyle(0x51b96d).fillRect(FIELD.left, FIELD.floor, FIELD.right - FIELD.left, 12);
-    graphics.lineStyle(3, 0xd3ffdf).lineBetween(FIELD.left, FIELD.floor, FIELD.right, FIELD.floor);
-    graphics.lineStyle(2, 0xcaffdc, 0.5).lineBetween(FIELD.width / 2, FIELD.floor, FIELD.width / 2, FIELD.height);
-    graphics.strokeEllipse(FIELD.width / 2, FIELD.floor + 28, 180, 38);
+    graphics.fillStyle(INK).fillRect(0, 0, FIELD.width, FIELD.height);
+    this.drawTwilight(graphics);
+    this.drawStands(graphics);
+    for (const x of [92, FIELD.width - 92]) this.drawFloodlight(graphics, x);
+    // Quiet foreground behind the actors: no crowd or beams cross the goal mouths.
+    graphics.fillStyle(0x1b424a).fillRect(0, 478, FIELD.width, FIELD.floor - 478);
+    graphics.fillStyle(0x132e39).fillRect(0, 478, FIELD.width, 8);
+    this.drawGrass(graphics);
     graphics.lineStyle(5, 0x36566e);
     graphics.lineBetween(FIELD.left, FIELD.top, FIELD.left, FIELD.goalTop);
     graphics.lineBetween(FIELD.right, FIELD.top, FIELD.right, FIELD.goalTop);
     graphics.lineStyle(2, 0x36566e, 0.4).lineBetween(FIELD.left, FIELD.top, FIELD.right, FIELD.top);
     this.drawGoal(graphics, FIELD.left - 48, FIELD.left, COLORS[0]);
     this.drawGoal(graphics, FIELD.right, FIELD.right + 48, COLORS[1]);
+  }
+
+  private drawTwilight(graphics: Phaser.GameObjects.Graphics): void {
+    // Solid bands also bake correctly with Phaser's Canvas texture generator.
+    const sky = [0x142339, 0x1c2c46, 0x24344e, 0x2c3b55, 0x3c425b, 0x514963, 0x68516a,
+      0x805b70, 0x9d697a, 0xb57b83, 0xca8d8b, 0xdda18f, 0xe8b39a, 0xf3c5a5];
+    sky.forEach((color, band) => graphics.fillStyle(color).fillRect(0, band * 24, FIELD.width, 24));
+    graphics.fillStyle(0xffd9a6).fillCircle(950, 278, 42);
+    graphics.fillStyle(0xb18a89).fillRect(0, 336, FIELD.width, 18);
+    // An original, deterministic roofline, with a few warm windows; no image assets.
+    for (let x = 18, block = 0; x < FIELD.width - 80; x += 83, block++) {
+      const height = 28 + (block * 19) % 52;
+      const width = 54 + (block % 3) * 8;
+      graphics.fillStyle(0x34384e).fillRect(x, 354 - height, width, height);
+      graphics.fillRect(x + 12, 346 - height, 18, 8);
+      graphics.fillStyle(0xffd4a0, 0.35).fillRect(x + 9, 364 - height, 4, 6);
+      graphics.fillRect(x + 25, 364 - height, 4, 6);
+    }
+    graphics.fillStyle(0x222e44).fillRect(0, 346, FIELD.width, 12);
+  }
+
+  private drawStands(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.fillStyle(0x17283f).beginPath().moveTo(0, 330).lineTo(180, 350)
+      .lineTo(1100, 350).lineTo(FIELD.width, 330).lineTo(FIELD.width, 478).lineTo(0, 478).closePath().fillPath();
+    const decks = [0x26364e, 0x304159, 0x34485d];
+    const crowd = [0x7894a3, 0xab967f, 0x537c9a, 0xb77e60];
+    decks.forEach((color, row) => {
+      const y = 356 + row * 38;
+      graphics.fillStyle(color).fillRect(0, y, FIELD.width, 30);
+      // Group by ink to bound style changes; small heads stay subordinate to the ball.
+      crowd.forEach((shirt, group) => {
+        graphics.fillStyle(shirt, 0.8);
+        for (let seat = group; seat < 39; seat += crowd.length) {
+          const x = 32 + seat * 32;
+          graphics.fillCircle(x, y + 10, 3).fillEllipse(x, y + 17, 10, 5);
+        }
+      });
+      graphics.fillStyle(0x14283c).fillRect(0, y + 24, FIELD.width, 6);
+      graphics.fillStyle(0x75929c, 0.45).fillRect(0, y + 28, FIELD.width, 2);
+    });
+    for (const x of [224, 640, 1056]) {
+      graphics.fillStyle(0x1d3047).fillRect(x - 6, 356, 12, 106);
+      graphics.lineStyle(1, 0x9daca5, 0.3);
+      for (let y = 364; y < 462; y += 12) graphics.lineBetween(x - 5, y, x + 5, y);
+    }
+    graphics.lineStyle(3, 0xe4b38e, 0.5).lineBetween(0, 330, 180, 350)
+      .lineBetween(180, 350, 1100, 350).lineBetween(1100, 350, FIELD.width, 330);
+    // Blue and orange fascia ties the stadium to both kits and the phone panels.
+    graphics.fillStyle(0x315c7a).fillRect(0, 466, FIELD.width / 2, 8);
+    graphics.fillStyle(0x886044).fillRect(FIELD.width / 2, 466, FIELD.width / 2, 8);
+  }
+
+  private drawFloodlight(graphics: Phaser.GameObjects.Graphics, x: number): void {
+    const direction = x < FIELD.width / 2 ? 1 : -1;
+    graphics.fillStyle(0xffedc3, 0.04).beginPath().moveTo(x - 24, 210).lineTo(x + 24, 210)
+      .lineTo(x + direction * 390, 436).lineTo(x + direction * 185, 436).closePath().fillPath();
+    graphics.lineStyle(7, 0x172b42).lineBetween(x, 210, x, 348);
+    graphics.lineStyle(2, 0x7c8e9b).lineBetween(x - 2, 214, x - 2, 342);
+    graphics.fillStyle(0x172b42).fillRoundedRect(x - 37, 190, 74, 24, 5);
+    graphics.fillStyle(0x9aa69f).fillRoundedRect(x - 33, 193, 66, 18, 3);
+    graphics.fillStyle(0xffedc3);
+    for (let lamp = 0; lamp < 6; lamp++) graphics.fillRect(x - 29 + lamp * 10, 198, 8, 8);
+  }
+
+  private drawGrass(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.fillStyle(0x204c3b).fillRect(0, FIELD.floor, FIELD.width, FIELD.height - FIELD.floor);
+    graphics.fillStyle(0x285d43);
+    for (let stripe = 0; stripe < 10; stripe += 2) graphics.fillRect(stripe * 128, FIELD.floor, 128, FIELD.height - FIELD.floor);
+    graphics.lineStyle(1, 0x8fbd85, 0.16);
+    for (let tuft = 0; tuft < 40; tuft++) {
+      const x = 24 + tuft * 31;
+      const y = FIELD.floor + 20 + (tuft * 17) % 48;
+      graphics.lineBetween(x, y, x + 5, y - 2);
+    }
+    graphics.fillStyle(0x57ad70).fillRect(FIELD.left, FIELD.floor, FIELD.right - FIELD.left, 10);
+    graphics.fillStyle(INK, 0.18).fillRect(0, FIELD.floor + 10, FIELD.width, 6);
+    graphics.lineStyle(3, 0xd3ffdf).lineBetween(FIELD.left, FIELD.floor, FIELD.right, FIELD.floor);
+    graphics.lineStyle(2, 0xcaffdc, 0.5).lineBetween(FIELD.width / 2, FIELD.floor, FIELD.width / 2, FIELD.height);
+    graphics.strokeEllipse(FIELD.width / 2, FIELD.floor + 28, 180, 38);
+    graphics.lineStyle(2, 0xcaffdc, 0.25).lineBetween(FIELD.left, FIELD.floor + 14, 24, FIELD.height)
+      .lineBetween(FIELD.right, FIELD.floor + 14, FIELD.width - 24, FIELD.height);
+    graphics.fillStyle(0x122d30).fillRect(0, FIELD.height - 8, FIELD.width, 8);
   }
 
   private drawGoal(graphics: Phaser.GameObjects.Graphics, left: number, right: number, color: number): void {
