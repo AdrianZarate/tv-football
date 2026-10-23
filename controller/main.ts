@@ -1,5 +1,6 @@
 import { InputTracker } from './input.js';
 import { installVisibleViewport } from './viewport.js';
+import { installControlsMode } from './controls-mode.js';
 import { RoomCredentials, RetryWindow } from './session.js';
 import { RttWindow } from '../shared/metrics.js';
 import { errorMessage, endedMessage, phaseLabel, formatRttSpanish } from '../shared/messages.js';
@@ -53,6 +54,14 @@ const input = new InputTracker(buttons => {
   for (const button of controls) button.dataset.held = String(buttons[button.dataset.control as keyof Buttons]);
   if (slot) send({ type: 'input', sequence: ++sequence, buttons });
 });
+const controlsMode = installControlsMode({
+  panel: document.querySelector<HTMLElement>('#controls-panel')!,
+  openButton: document.querySelector<HTMLButtonElement>('#controls-open')!,
+  exitButton: document.querySelector<HTMLButtonElement>('#controls-exit')!,
+  note: document.querySelector<HTMLElement>('#controls-note')!,
+  canEnter: () => game && Boolean(slot) && mode === 'connected' && !hidden(),
+  release: () => input.reset(),
+});
 function clearRetryTimer() { clearTimeout(retryTimer); retryTimer = undefined; }
 function detach() {
   const old = socket;
@@ -68,7 +77,9 @@ function updateReady() {
     : latestStatus?.phase === 'paused' ? 'Confirmar reanudación' : 'Listo para jugar';
 }
 function disable() {
+  controlsMode.exit();
   input.reset(); slot = undefined;
+  controlsMode.refresh();
   form.hidden = false;
   renderGameStatus();
   for (const button of controls) button.disabled = true;
@@ -81,6 +92,7 @@ function enable() {
   clearTimeout(connectTimer); connectTimer = undefined;
   for (const button of controls) button.disabled = hidden();
   updateReady();
+  controlsMode.refresh();
   setStatus(`Jugador ${slot} conectado (P${slot} ${slot === 1 ? 'azul' : 'naranja'}). ${game ? 'Confirmen que están listos en ambos teléfonos.' : 'Esperá a los dos jugadores en la TV.'}`);
   input.reset();
   if (game && hidden()) background();
@@ -171,6 +183,7 @@ function openConnection(resuming: boolean) {
   });
 }
 function background() {
+  controlsMode.exit();
   input.reset();
   clearRetryTimer();
   if (game && socket) {
@@ -179,6 +192,7 @@ function background() {
   updateReady();
 }
 function foreground() {
+  controlsMode.refresh();
   if (mode === 'recovering' && !socket) recover();
   else if (mode === 'connected') {
     for (const button of controls) button.disabled = hidden();

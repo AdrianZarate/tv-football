@@ -29,7 +29,7 @@ class Element {
 const last = <T>(values: T[]): T => values[values.length - 1]!;
 let bundled: Promise<string> | undefined;
 /** Browser API facade, not a layout engine. Execute the actual bundled phone entrypoint. */
-export async function createPhone(source?: string, options: { visual?: boolean; saved?: [string, string][]; search?: string; denied?: boolean; protocol?: string; hostname?: string; markup?: string } = {}) {
+export async function createPhone(source?: string, options: { visual?: boolean; saved?: [string, string][]; search?: string; denied?: boolean; protocol?: string; hostname?: string; markup?: string; display?: (document: Element & { fullscreenElement: Element | null }, panel: Element, window: Element & { screen: object }) => void } = {}) {
   const html = options.markup ?? await readFile('controller/index.html', 'utf8');
   const elements = new Map<string, Element>();
   const controls: Element[] = [];
@@ -50,7 +50,7 @@ export async function createPhone(source?: string, options: { visual?: boolean; 
   }
   const el = (id: string) => { const found = elements.get(id); assert.ok(found, `Missing actual DOM element ${id}`); return found; };
   const documentElement = root.children.find(child => child instanceof Element) as Element;
-  const document = Object.assign(new Element(), { hidden: false, documentElement, querySelector: el, querySelectorAll: () => controls });
+  const document = Object.assign(new Element(), { hidden: false, fullscreenElement: null as Element | null, documentElement, querySelector: el, querySelectorAll: () => controls });
   const saved = new Map(options.saved);
   const storageCalls: unknown[][] = [];
   const sessionStorage = {
@@ -61,9 +61,10 @@ export async function createPhone(source?: string, options: { visual?: boolean; 
   const visualViewport = Object.assign(new Element(), { height: 650 });
   const frames = new Map<number, Function>(); let frameId = 0;
   const window = Object.assign(new Element(), {
-    innerHeight: 844, visualViewport: options.visual === false ? undefined : visualViewport, sessionStorage,
+    innerHeight: 844, visualViewport: options.visual === false ? undefined : visualViewport, sessionStorage, screen: {},
     requestAnimationFrame: (fn: Function) => { frames.set(++frameId, fn); return frameId; },
   });
+  if (options.display) options.display(document, el('#controls-panel'), window);
   const timers = new Map<number, { fn: Function; at: number }>(); let timerId = 0; let now = 0;
   const intervals: { fn: Function; delay: number }[] = [];
   const sockets: Socket[] = [];
@@ -298,9 +299,86 @@ test('preservation: public phone workflow keeps validation, neutral release, six
   assert.equal(at('legacy-close-no-recovery').sockets.length, 1); assert.equal(at('legacy-close-no-recovery').ready.hidden, true);
 });
 
+test('Controles is assigned-game-only, preserves four buttons/session and keeps all confirmations inside the panel', async () => {
+  const h = await createPhone(); const buttons = [...h.controls];
+  assert.equal(h.el('#controls-open').hidden, true);
+  h.el('#controls-open').emit('click'); assert.notEqual(h.el('#controls-panel').dataset.controlsMode, 'true');
+  const ws = h.join(); const saved = [...h.saved]; const storage = structuredClone(h.storageCalls);
+  assert.equal(h.el('#controls-open').hidden, false);
+  h.controls[0]!.emit('pointerdown', { pointerId: 7 });
+  const before = structuredClone(ws.sent);
+  h.el('#controls-open').emit('click');
+  assert.equal(h.el('#controls-panel').dataset.controlsMode, 'true');
+  assert.deepEqual(ws.sent, [...before, { type: 'input', sequence: 4, buttons: neutral }]);
+  assert.equal(h.el('#controls-exit').hidden, false); assert.match(h.el('#controls-note').textContent, /Girá el teléfono/);
+  for (const phase of ['lobby', 'paused', 'finished']) {
+    ws.message({ ...playing, phase }); assert.equal(h.el('#ready').disabled, false);
+    h.el('#ready').emit('click'); assert.deepEqual(last(ws.sent), { type: 'ready' });
+  }
+  const panel = h.el('#controls-panel');
+  const contains = (parent: Element, target: Element): boolean => parent === target || parent.children.some(child => child instanceof Element && contains(child, target));
+  for (const id of ['#status', '#ready', '#game-status', '#controls', '#controls-exit']) assert.ok(contains(panel, h.el(id)), id);
+  h.controls[3]!.emit('pointerdown', { pointerId: 8 });
+  const held = structuredClone(ws.sent); h.visualViewport.height = 280; h.window.emit('orientationchange'); h.visualViewport.emit('resize'); h.flush();
+  assert.deepEqual(ws.sent, held); assert.deepEqual(h.controls[3]!.captured, [8]);
+  h.el('#controls-exit').emit('click'); assert.equal(h.el('#controls-panel').dataset.controlsMode, 'false');
+  assert.deepEqual(last(ws.sent).buttons, neutral);
+  h.tick(100); assert.deepEqual(last(ws.sent).buttons, neutral, 'no stale held heartbeat');
+  h.controls.forEach((button, i) => assert.equal(button, buttons[i]));
+  assert.equal(h.sockets.length, 1); assert.equal(ws.closeCalls, 0); assert.deepEqual([...h.saved], saved); assert.deepEqual(h.storageCalls, storage);
+  assert.deepEqual(h.intervals.map(i => i.delay), [100, 1000]);
+  const legacy = await createPhone(); legacy.el('#room').value = 'ABCD2345'; legacy.el('#join-form').emit('submit');
+  legacy.sockets[0]!.message({ type: 'joined', slot: 1 });
+  assert.equal(legacy.el('#controls-open').hidden, true); legacy.el('#controls-open').emit('click');
+  assert.notEqual(legacy.el('#controls-panel').dataset.controlsMode, 'true');
+  legacy.controls[0]!.emit('pointerdown', { pointerId: 1 }); assert.deepEqual(last(legacy.sockets[0]!.sent).buttons, { ...neutral, left: true });
+});
+
+test('native API rejection is nonfatal to the actual entry, with only intentional neutral boundary messages', async () => {
+  const h = await createPhone(undefined, { display(_document, panel) { Object.assign(panel, { requestFullscreen: () => Promise.reject(new Error('denied')) }); } });
+  const ws = h.join(); const status = h.el('#status').textContent; const saved = [...h.saved]; const storage = structuredClone(h.storageCalls); const before = structuredClone(ws.sent);
+  h.el('#controls-open').emit('click'); for (let i = 0; i < 16; i++) await Promise.resolve();
+  assert.equal(h.el('#controls-panel').dataset.controlsMode, 'true'); assert.equal(h.el('#status').textContent, status);
+  assert.deepEqual(ws.sent, [...before, { type: 'input', sequence: 3, buttons: neutral }]);
+  assert.deepEqual([...h.saved], saved); assert.deepEqual(h.storageCalls, storage); assert.equal(ws.closeCalls, 0); assert.equal(h.sockets.length, 1);
+  h.controls[1]!.emit('pointerdown', { pointerId: 1 }); assert.deepEqual(last(ws.sent), { type: 'input', sequence: 4, buttons: { ...neutral, right: true } });
+  h.el('#controls-exit').emit('click'); assert.deepEqual(last(ws.sent), { type: 'input', sequence: 5, buttons: neutral });
+});
+
+for (const event of ['visibilitychange', 'pagehide', 'ended', 'close']) test(`active mode exits safely on ${event}; existing recovery/termination remains authoritative`, async () => {
+  let exits = 0; let unlocks = 0;
+  const h = await createPhone(undefined, { display(document, panel, window) {
+    Object.assign(panel, { requestFullscreen() { document.fullscreenElement = panel; document.emit('fullscreenchange'); return Promise.resolve(); } });
+    Object.assign(document, { exitFullscreen() { exits++; document.fullscreenElement = null; document.emit('fullscreenchange'); return Promise.resolve(); } });
+    window.screen = { orientation: { lock: () => Promise.resolve(), unlock() { unlocks++; } } };
+  } });
+  const ws = h.join(); h.el('#controls-open').emit('click'); for (let i = 0; i < 16; i++) await Promise.resolve();
+  h.controls[0]!.emit('pointerdown', { pointerId: 1 }); const saved = [...h.saved];
+  if (event === 'visibilitychange') { h.document.hidden = true; h.document.emit(event); }
+  else if (event === 'pagehide') h.window.emit(event);
+  else if (event === 'ended') ws.message({ type: 'ended', reason: 'tv_disconnected' });
+  else ws.emit('close');
+  for (let i = 0; i < 16; i++) await Promise.resolve();
+  assert.equal(h.el('#controls-panel').dataset.controlsMode, 'false'); assert.equal(h.document.fullscreenElement, null);
+  assert.equal(exits, 1); assert.equal(unlocks, 1); assert.deepEqual(last(ws.sent).buttons, neutral); assert.equal(ws.closeCalls, 1);
+  assert.ok(h.controls.every(button => button.disabled)); assert.equal(h.el('#controls-open').hidden, true);
+  assert.deepEqual([...h.saved], event === 'ended' ? [] : saved);
+  if (event === 'ended') { h.advance(60000); h.tick(1000); assert.equal(h.sockets.length, 1); }
+  else {
+    if (event === 'visibilitychange' || event === 'pagehide') { h.advance(1000); assert.equal(h.sockets.length, 1); h.document.hidden = false; h.document.emit('visibilitychange'); h.window.emit('pageshow'); }
+    h.advance(1000); assert.equal(h.sockets.length, 2); const resumed = h.sockets[1]!; resumed.emit('open');
+    assert.deepEqual(resumed.sent, [{ type: 'resume', code: 'ABCD2345', key: 'a'.repeat(64) }]);
+    resumed.message({ type: 'joined', slot: 2 }); resumed.message({ type: 'resumeKey', key: 'b'.repeat(64) }); resumed.message({ ...playing, phase: 'paused' });
+    assert.equal(h.el('#controls-panel').dataset.controlsMode, 'false'); assert.equal(h.el('#ready').textContent, 'Confirmar reanudación');
+    h.el('#ready').emit('click'); assert.deepEqual(last(resumed.sent), { type: 'ready' });
+  }
+});
+
 // Stylesheet contracts describe design intent, not measured layout or physical comfort.
 const rule = (css: string, selector: string) => {
-  const start = css.indexOf(`${selector} {`);
+  // Match the complete selector, not a suffix of a mode-specific descendant rule.
+  const marker = css.indexOf(`\n${selector} {`);
+  const start = css.startsWith(`${selector} {`) ? 0 : marker === -1 ? -1 : marker + 1;
   assert.notEqual(start, -1, `Missing stylesheet rule ${selector}`);
   return css.slice(start, css.indexOf('}', start) + 1);
 };

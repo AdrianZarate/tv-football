@@ -8,7 +8,13 @@
   <script src="./main.js" defer></script>
 </head>
 <body>
-  <div class="connection-panel">
+ <main id="controls-panel" aria-label="Mando del jugador">
+  <div class="panel-heading">
+   <div class="mode-toolbar">
+    <button id="controls-exit" type="button" hidden>Volver</button>
+   </div>
+   <div class="connection-panel">
+    <p id="controls-note" role="status" hidden>Girá el teléfono para jugar en horizontal.</p>
     <header>
       <h1>Fútbol TV <span>· Controles</span></h1>
       <p id="status" role="status">Ingresá el código que aparece en la TV.</p>
@@ -22,7 +28,9 @@
       <p id="storage-status" role="status"></p>
       <p id="game-status" aria-live="polite"><span id="score-p1"></span><span id="score-p2"></span><span id="match-time"></span><span id="match-phase"></span></p>
       <button id="ready" type="button" hidden disabled>Listo para jugar</button>
+      <button id="controls-open" type="button" hidden disabled>Controles</button>
     </section>
+   </div>
   </div>
   <section id="controls" aria-label="Controles del jugador">
     <div class="movement" role="group" aria-label="Movimiento">
@@ -36,6 +44,7 @@
   </section>
   <details><summary>Ayuda y conexión</summary>
     <p>La ayuda se desplaza dentro de este panel, después de los controles. Usá el pulgar izquierdo para moverte y el derecho para Saltar o Patear. Podés girar el teléfono o ampliar la página.</p>
+    <p>En una sala de juego, tocá Controles para abrir el mando dedicado. Se intenta pantalla completa y orientación horizontal si el navegador lo permite; no está garantizado en todos los teléfonos. Si no funciona, girá el teléfono: los mismos botones, marcador y preparación siguen disponibles. Volver o Escape cierra el modo sin salir de la sala.</p>
     <p>Usá varios dedos: mantené el movimiento mientras pulsás Saltar o Patear. El marcador siempre muestra P1 azul a la izquierda y P2 naranja a la derecha; tu jugador aparece en el aviso de conexión.</p>
     <p>Las salas de juego reservan tu lugar en esta sesión del navegador. Si volvés dentro de 60 segundos, ambos deben confirmar la reanudación; también deben confirmar una revancha. Conservá esta pestaña: otro navegador no puede reemplazarte. La TV controla el marcador y el reloj.</p>
     <p>Las salas de prueba anteriores no tienen botón de preparación ni recuperación; creá otra sala de prueba después de desconectarte.</p>
@@ -43,5 +52,6 @@
     <p>Teléfono ↔ TV, a través del servidor: <span id="tv-rtt">Esperando muestras</span></p>
     <p>RTT es el tiempo de ida y vuelta de un mensaje de aplicación. Estas mediciones NO son la latencia del botón a la pantalla. La TV responde antes de dibujar. Ventana móvil: 120 muestras.</p>
   </details>
+ </main>
 </body>
 </html>

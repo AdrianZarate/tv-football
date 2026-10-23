@@ -49,6 +49,19 @@ test('phone markup preserves four named disabled bindings, form and visible stat
   }
 });
 
+test('dedicated controls panel declares viewport fallback, safe-area padding, exit and Spanish rotate hint without fake rotation', async () => {
+  const html = await markup(); const css = await readFile('controller/style.css', 'utf8');
+  for (const id of ['controls-panel', 'controls-open', 'controls-exit', 'controls-note']) assert.equal([...html.matchAll(new RegExp(`\\bid="${id}"`, 'g'))].length, 1, id);
+  assert.match(html, /id="controls-open"[^>]*hidden disabled>Controles</);
+  assert.match(html, /id="controls-exit"[^>]*hidden>Volver</);
+  assert.match(html, /Girá el teléfono/);
+  assert.match(css, /#controls-panel\[data-controls-mode="true"\]\s*\{[^}]*position:\s*fixed/s);
+  assert.match(css, /#controls-panel\[data-controls-mode="true"\]\s*\{[^}]*inset:\s*0/s);
+  assert.match(css, /#controls-panel\[data-controls-mode="true"\]\s*\{[^}]*height:\s*var\(--visible-height/s);
+  assert.match(css, /#controls-panel\[data-controls-mode="true"\] #controls-exit\s*\{[^}]*min-height:\s*64px/s);
+  assert.doesNotMatch(css, /rotate\((?:90|270|-90)deg\)/);
+});
+
 test('phone assets stay local and safe-area/touch declarations remain scoped to game controls', async () => {
   const html = await markup();
   const css = await readFile('controller/style.css', 'utf8');
