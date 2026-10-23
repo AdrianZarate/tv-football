@@ -17,6 +17,7 @@ const clock = document.querySelector<HTMLElement>('#clock')!;
 const scoreP1 = document.querySelector<HTMLElement>('#score-p1')!;
 const scoreP2 = document.querySelector<HTMLElement>('#score-p2')!;
 const goalBanner = document.querySelector<HTMLElement>('#goal-banner')!;
+const finishBanner = document.querySelector<HTMLElement>('#finish-banner')!;
 const debug = new URLSearchParams(location.search).get('debug') === '1';
 document.querySelector<HTMLElement>('#diagnostics')!.hidden = !debug;
 let socket: WebSocket | undefined;
@@ -97,6 +98,12 @@ function renderStatus(dirty = true) {
   } else if (now >= goalUntil) clearGoal();
   displayedScore = [...state.score];
   goalGeneration = generation;
+  // Derive the terminal overlay from the owned room, never a timed goal or cached winner.
+  const finished = Boolean(code) && !hidden() && state.phase === 'finished';
+  finishBanner.hidden = !finished;
+  text(finishBanner, finished
+    ? `¡FIN DEL PARTIDO!\n${state.winner === null ? 'EMPATE' : `GANA ${state.winner === 1 ? 'P1 azul' : 'P2 naranja'}`}\nP1 azul: ${state.score[0]} · P2 naranja: ${state.score[1]}`
+    : '');
   if (code) text(status, describeMatch(state, now));
   // Collapse only once play begins. The full logical pitch is always visible, never cropped.
   if (document.body.dataset.phase !== state.phase) document.body.dataset.phase = state.phase;

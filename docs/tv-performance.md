@@ -31,6 +31,16 @@ Los manifiestos y dependencias no cambian en esta unidad. La escena Phaser decor
 
 Un único timeout cancelable apunta al próximo límite real: vencimiento de los 60 segundos de reconexión, fin del partido o fin de los 1200 ms del anuncio de gol. Así no se necesitan fotogramas de pausa ni se agrega un segundo de tolerancia. El heartbeat de red existente conserva los estados públicos y el contador de pausa sin redibujar. El anuncio corresponde al incremento de marcador acreditado por el modelo, incluso si se liquida justo al desconectar; no se duplica y se limpia en reinicios y estados terminales.
 
+## Final visible de 0.2.7 (T3 / S4)
+
+Al terminar los 120 segundos activos aparece **«¡FIN DEL PARTIDO!»**, con «GANA P1 azul», «GANA P2 naranja» o «EMPATE» y el marcador final acreditado. El letrero queda visible en reposo; una sola confirmación no lo quita. Se limpia cuando ambos confirman la revancha o al abandonar/reemplazar la sala. Cancelar, perder la conexión de TV o pasar a segundo plano no declara un ganador.
+
+El final tiene prioridad sobre los 1200 ms del anuncio de gol, incluso con un gol a 10 ms del límite. Se deriva de la fase, ganador y marcador del anfitrión en `renderStatus`, sin guardar otro resultado ni crear temporizadores, audio o animaciones. El timeout único existente mantiene el límite exacto; no se modifican física, controles, protocolo, renderizador ni planificador. La superposición DOM es opaca, accesible y no captura entradas; conserva la cancha lógica completa de 1280 × 720 y los presupuestos de RAF existentes. Esto no evita ni certifica el protector de pantalla del sistema.
+
+Las pruebas de entrada pública cubren ambos ganadores, empate, marcador, persistencia sin dibujo, revancha con dos confirmaciones, sala nueva, cierres/cancelación/segundo plano, callbacks viejos y prioridad del final. RED previo: foco UI/localización **38/52**, salida 1 por letrero ausente. Primer intento posterior: **49/52**, salida 1 porque el fixture de persistencia omitía mantener vivo el servidor; se agregó un `pong` público, sin cambiar aserciones ni producto. GREEN final: `node --import tsx --test tests/tv-ui.test.ts tests/localization.test.ts`, **52/52**, salida 0 y stderr vacío; `npm run typecheck`, salida 0 y stderr vacío (el wrapper de npm emitió DEP0190 fuera del proceso comprobado).
+
+El diferencial temporal contra **d49d47a** compara **22 puntos públicos** de DOM existente, mensajes, reloj, gol/pausa/revancha, teclas y contadores de sockets, lienzos, dibujos y planificación: stdout idéntico byte a byte, stderr vacío, salidas 0/0. Solo excluye el nuevo nodo `#finish-banner`; las copias y evidencias permanecen ignoradas en `artifacts/active-play-0.2.7/base-banner` y `banner-*.json`. No se ejecutó la suite completa en esta unidad. La aceptación visual en TV sigue pendiente; no se ejecutan capturas ni instalación.
+
 ## Verificación del arte nativo (T2 / S1)
 
 - RED: `node --import tsx --test tests/canvas-renderer.test.ts`, salida 1: 5 pasan y 6 fallan por falta de atlas, suelo lateral y ciclo de vida del tercer recurso.

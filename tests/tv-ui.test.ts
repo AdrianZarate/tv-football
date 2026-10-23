@@ -407,7 +407,7 @@ test('native drawing stops in idle; HUD phase writes and hidden diagnostics stop
   assert.equal(h.pendingFrames(), 0);
   const draws = h.drawCalls.length;
   const writes = h.phaseWrites();
-  const hud = ['#clock', '#score-p1', '#score-p2', '#status', '#goal-banner'].map(id => h.element(id));
+  const hud = ['#clock', '#score-p1', '#score-p2', '#status', '#goal-banner', '#finish-banner'].map(id => h.element(id));
   const textWrites = hud.map(element => element.textWrites);
   for (let i = 0; i < 10; i++) h.frame(10);
   assert.equal(h.phaseWrites(), writes);
@@ -427,6 +427,9 @@ test('TV markup keeps labelled colors in global P1/P2 order and an accessible no
   assert.match(css, /#score-p1\s*\{[^}]*#389dff/i);
   assert.match(css, /#score-p2\s*\{[^}]*#ff9845/i);
   assert.match(css, /#goal-banner\s*\{[^}]*pointer-events:\s*none/);
+  assert.match(html, /id="finish-banner"[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"[^>]*hidden/);
+  assert.match(css, /#finish-banner\s*\{[^}]*pointer-events:\s*none/);
+  assert.match(css, /#finish-banner\s*\{[^}]*white-space:\s*pre-line/);
 });
 
 for (const slot of [1, 2] as const) test(`actual goal at P${slot}'s target announces the credited player once for 1200 ms while clock runs`, () => {
@@ -555,6 +558,102 @@ test('native entry and direct public host preserve the same full match, leases, 
   now += 59999; h.elapse(59999); check(); // No idle host update without a frame, event or heartbeat.
   advance(1, false);
   assert.equal(h.snapshot().phase, 'cancelled'); assert.equal(h.snapshot().winner, null);
+});
+
+for (const result of [1, 2, 'draw'] as const) test(`finished ${result} shows the authoritative result and final score until both confirm rematch`, () => {
+  const h = result === 'draw' ? browser(bundle) : playingGoal(result).h;
+  const ws = h.sockets[0]!;
+  if (result === 'draw') {
+    created(ws); ws.message({ type: 'state', connected: [true, true] });
+    ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  }
+  h.elapse(result === 'draw' ? 119999 : 119989);
+  assert.equal(h.document.body.dataset.phase, 'playing');
+  assert.equal(h.element('#finish-banner').hidden, true);
+  h.elapse(1); // The existing exact deadline must finish without a frame or heartbeat.
+  const p1 = result === 1 ? 1 : 0; const p2 = result === 2 ? 1 : 0;
+  const announcement = `¡FIN DEL PARTIDO!\n${result === 'draw' ? 'EMPATE' : `GANA P${result} ${result === 1 ? 'azul' : 'naranja'}`}\nP1 azul: ${p1} · P2 naranja: ${p2}`;
+  const banner = h.element('#finish-banner');
+  assert.equal(banner.hidden, false); assert.equal(banner.textContent, announcement);
+  assert.equal(h.element('#goal-banner').hidden, true); assertScore(h, p1, p2);
+  assert.equal(h.element('#clock').textContent, '00:00');
+  const finalStatus = ws.sent[ws.sent.length - 1];
+  assert.equal(finalStatus.phase, 'finished'); assert.equal(finalStatus.remainingMs, 0);
+  assert.deepEqual(finalStatus.score, [p1, p2]);
+  ws.message({ type: 'pong', id: 1 }); // Keep the relay alive before checking the idle heartbeat.
+  h.frame(); const draws = h.drawCalls.length; const writes = banner.textWrites;
+  h.elapse(2000); for (const tick of h.intervals) tick(); h.frame();
+  assert.equal(banner.hidden, false); assert.equal(banner.textContent, announcement);
+  assert.equal(banner.textWrites, writes); assert.equal(h.drawCalls.length, draws);
+  assert.equal(h.pendingFrames(), 0); assert.equal(h.pendingTimers(), 0);
+  assert.equal(h.intervals.length, 1); assert.equal(h.sockets.length, 1); assert.equal(ws.closed, 0);
+  ws.message({ type: 'ready', slot: 1 });
+  assert.equal(banner.hidden, false); assert.equal(banner.textContent, announcement);
+  ws.message({ type: 'ready', slot: 2 });
+  assert.equal(banner.hidden, true); assert.equal(banner.textContent, '');
+  assert.equal(h.document.body.dataset.phase, 'playing'); assertScore(h, 0, 0);
+  assert.equal(h.element('#clock').textContent, '02:00');
+});
+
+for (const boundary of ['new room', 'ended', 'error', 'close', 'visibility', 'pagehide', 'cancelled'] as const)
+  test(`${boundary} never declares a winner and cannot restore a stale finish banner`, () => {
+    const { h, ws } = playingGoal(1);
+    if (boundary !== 'cancelled') {
+      h.elapse(119990); assert.equal(h.element('#finish-banner').hidden, false);
+    }
+    if (boundary === 'new room') h.element('#new-room').emit('click');
+    else if (boundary === 'ended') ws.message({ type: 'ended', reason: 'room_expired' });
+    else if (boundary === 'error' || boundary === 'close') ws.emit(boundary);
+    else if (boundary === 'visibility') h.visible(true);
+    else if (boundary === 'pagehide') h.window.emit('pagehide');
+    else { ws.message({ type: 'state', connected: [false, true] }); h.elapse(60000); }
+    assert.equal(h.element('#finish-banner').hidden, true); assert.equal(h.element('#finish-banner').textContent, '');
+    assert.equal(h.element('#goal-banner').hidden, true);
+    assert.match(h.element('#status').textContent, boundary === 'cancelled' ? /sin ganador/ : /Nueva sala|Conectando/);
+    if (boundary === 'new room') {
+      created(h.sockets[1]!, 'EFGH6789');
+      assert.equal(h.document.body.dataset.phase, 'lobby'); assertScore(h, 0, 0);
+    }
+    const before = { status: h.element('#status').textContent, sent: JSON.stringify(h.sockets.map(socket => socket.sent)), sockets: h.sockets.length };
+    if (boundary !== 'cancelled') {
+      ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+      ws.message({ type: 'created', code: 'JKLM2345' }); ws.emit('close');
+    }
+    h.frame(); h.elapse(2000);
+    assert.equal(h.element('#finish-banner').hidden, true); assert.equal(h.element('#finish-banner').textContent, '');
+    assert.equal(h.element('#status').textContent, before.status);
+    assert.equal(JSON.stringify(h.sockets.map(socket => socket.sent)), before.sent);
+    assert.equal(h.sockets.length, before.sockets);
+  });
+
+for (const slot of [1, 2] as const) test(`P${slot} goal just before expiry yields to the persistent final banner at exactly 120 seconds`, () => {
+  const h = browser(goalBundles[slot - 1]!); const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] });
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  h.elapse(119990); ws.message({ type: 'pong', id: 1 });
+  assert.equal(h.element('#goal-banner').hidden, false);
+  assert.equal(h.element('#goal-banner').textContent, `¡GOOOLLL! P${slot} ${slot === 1 ? 'azul' : 'naranja'}`);
+  assert.equal(h.element('#finish-banner').hidden, true);
+  h.elapse(10);
+  assert.equal(h.element('#goal-banner').hidden, true); assert.equal(h.element('#goal-banner').textContent, '');
+  assert.equal(h.element('#finish-banner').hidden, false);
+  assert.equal(h.element('#finish-banner').textContent, `¡FIN DEL PARTIDO!\nGANA P${slot} ${slot === 1 ? 'azul' : 'naranja'}\nP1 azul: ${slot === 1 ? 1 : 0} · P2 naranja: ${slot === 2 ? 1 : 0}`);
+  assert.equal(h.element('#clock').textContent, '00:00'); assert.equal(h.pendingTimers(), 0);
+  h.elapse(1200); assert.equal(h.element('#finish-banner').hidden, false);
+});
+
+test('a pending goal at expiry cannot create a post-expiry score or wrong winner', () => {
+  const h = browser(goalBundles[0]!); const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] });
+  ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  h.elapse(120000);
+  const expected = '¡FIN DEL PARTIDO!\nEMPATE\nP1 azul: 0 · P2 naranja: 0';
+  assert.equal(h.element('#finish-banner').textContent, expected); assert.equal(h.element('#finish-banner').hidden, false);
+  assert.equal(h.element('#goal-banner').hidden, true); assertScore(h, 0, 0);
+  const count = ws.sent.length;
+  ws.message({ type: 'input', slot: 1, sequence: 1, buttons: { left: false, right: true, jump: false, kick: true } });
+  h.frame(100); assertScore(h, 0, 0);
+  assert.equal(ws.sent.length, count); assert.equal(h.element('#finish-banner').textContent, expected);
 });
 
 test('TV unknown error and ended strings never leak; malformed input cannot publish game state', () => {
