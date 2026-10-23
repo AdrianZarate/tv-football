@@ -9,8 +9,9 @@ export const BALL = Object.freeze({ radius: 18, restitution: 0.92, maxSpeed: 140
 export const MATCH_MS = 120000;
 export const DISCONNECT_MS = 60000;
 export const PHYSICS = Object.freeze({
-  gravity: 1700, maxFrameSeconds: 0.1, substepSeconds: 1 / 120,
-  kickRange: 100, kickSpeed: 900, kickLift: 650, kickCooldownMs: 400,
+  gravity: 1700, fallMultiplier: 2, maxFrameSeconds: 0.1, substepSeconds: 1 / 120,
+  kickRange: 100, kickSpeed: 1200, kickSettledSpeed: 900, kickDecaySeconds: 0.5,
+  kickLift: 650, kickCooldownMs: 400,
   rollingDrag: 1.8, rollStopSpeed: 2, bounceStopSpeed: 35,
 });
 
@@ -80,6 +81,7 @@ export class FootballMatch {
   private remainingMs = MATCH_MS;
   private players!: [PlayerSnapshot, PlayerSnapshot];
   private ball!: Body;
+  private kickDecayRemaining = 0;
   private winner: Slot | null = null;
   private disconnectDeadlineMs: number | null = null;
   private controls: [Control, Control] = [freshControl(), freshControl()];
@@ -216,6 +218,7 @@ export class FootballMatch {
     });
     this.players = [player(1, 360), player(2, 920)];
     this.ball = { x: FIELD.width / 2, y: FIELD.floor - BALL.radius, vx: 0, vy: 0 };
+    this.kickDecayRemaining = 0;
     this.clearControls();
   }
 
@@ -234,7 +237,7 @@ export class FootballMatch {
         player.grounded = false;
       }
       control.jump = false;
-      player.vy += PHYSICS.gravity * delta;
+      player.vy += PHYSICS.gravity * (player.vy > 0 ? PHYSICS.fallMultiplier : 1) * delta;
       player.x += player.vx * delta;
       player.y += player.vy * delta;
       this.boundPlayer(player);
@@ -249,9 +252,19 @@ export class FootballMatch {
         if (Math.hypot(dx, dy) <= PHYSICS.kickRange && dx * player.facing >= -BALL.radius) {
           this.ball.vx = player.facing * PHYSICS.kickSpeed;
           this.ball.vy = -PHYSICS.kickLift;
+          this.kickDecayRemaining = PHYSICS.kickDecaySeconds;
         }
       }
       control.kick = false;
+    }
+    if (this.kickDecayRemaining > 0) {
+      const next = Math.max(0, this.kickDecayRemaining - delta);
+      const envelope = (remaining: number) => PHYSICS.kickSettledSpeed
+        + (PHYSICS.kickSpeed - PHYSICS.kickSettledSpeed) * remaining / PHYSICS.kickDecaySeconds;
+      // Scale the current velocity, never steer toward a target: reflections and
+      // contact losses survive, and even a separating near-foot projection is safe.
+      this.ball.vx *= envelope(next) / envelope(this.kickDecayRemaining);
+      this.kickDecayRemaining = next;
     }
     const rolling = this.ball.y === FIELD.floor - BALL.radius && this.ball.vy === 0;
     this.ball.vy += PHYSICS.gravity * delta;

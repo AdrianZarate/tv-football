@@ -124,7 +124,7 @@ for (const slot of [1, 2] as const) for (const right of [false, true]) {
         game.setInput(1, controls[0], (step - 1) * dt * 1000); game.setInput(2, controls[1], (step - 1) * dt * 1000);
         game.step(dt, step * dt * 1000); playing(game.snapshot(), step, controls);
       }
-      vy += PHYSICS.gravity * dt; y += vy * dt;
+      vy += PHYSICS.gravity * (vy > 0 ? 2 : 1) * dt; y += vy * dt;
       if (y >= FIELD.floor) { y = FIELD.floor; vy = 0; }
       const player = match.snapshot().players[slot - 1]!;
       const reference = pureJump.snapshot().players[slot - 1]!;
@@ -208,5 +208,5 @@ test('a ball still rolls underneath a sufficiently airborne player without a fal
   }
   assert.ok(match.snapshot().ball.x > 626);
   assert.equal(PLAYER.speed, 420); assert.equal(PLAYER.jumpSpeed, 780);
-  assert.equal(PHYSICS.kickSpeed, 900); assert.equal(PHYSICS.kickLift, 650);
+  assert.equal(PHYSICS.kickSpeed, 1200); assert.equal(PHYSICS.kickLift, 650);
 });

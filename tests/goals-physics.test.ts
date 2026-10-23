@@ -114,7 +114,7 @@ test('kicks give a consistent controlled arc in either direction regardless of i
       match.setInput(slot, buttons({ kick: true }), 0);
       match.step(0.01, 10);
       const state = match.snapshot();
-      near(state.ball.vx, direction * 900);
+      near(state.ball.vx, direction * (1200 - 600 * 0.01));
       near(state.ball.vy, -633);
       assert.ok(state.players[slot - 1]!.kickCooldownMs > 380);
       assert.deepEqual(state.score, [0, 0]);

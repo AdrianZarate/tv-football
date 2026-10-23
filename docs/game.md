@@ -22,11 +22,13 @@ Los valores usan píxeles lógicos y segundos, no dependen de la resolución del
 | Parámetro | Valor elegido y compromiso |
 |---|---|
 | Movimiento | 420 px/s (antes 300); 210 px en medio segundo, con parada inmediata al soltar. |
-| Salto | Impulso de 780 px/s (antes 650), gravedad de 1700 px/s² sin cambios; altura aproximada de 176 px y vuelo de 0,92 s. Permite alcanzar mejor pelotas elevadas, sin doble salto ni repetición automática. |
+| Salto | Impulso de 780 px/s, subida y altura aproximada de 176 px conservadas. La gravedad del jugador es 1700 px/s² al subir o en el ápice y 3400 px/s² solo al descender: vuelve al suelo en unos 0,79 s, sin doble salto ni repetición automática. La pelota conserva gravedad de 1700 px/s². |
 | Rebote | Restitución de 0,92 (antes 0,55) en superficies y jugadores: rebotes mucho más altos y duraderos, sin ganar energía contra una superficie quieta. Un contacto ya separado no vuelve a aplicar restitución. |
 | Rodadura | Arrastre exponencial de 1,8 s⁻¹ integrado por tiempo, no por cantidad de cuadros/contactos. Una pelota libre a 300 px/s conserva unos 49,59 px/s tras un segundo y avanza unos 139,12 px. Bajo 2 px/s se detiene; rebotes verticales menores de 35 px/s se asientan. |
-| Patada | Velocidad horizontal fija de 900 px/s, impulso vertical de 650 px/s (antes 400), alcance de 100 px y espera de 400 ms sin cambios. Sustituye la velocidad entrante para un arco consistente en ambas direcciones. Desde el suelo, la pelota sube aproximadamente 120 px en vez de 45–47 px, sin cambiar el reloj ni la adjudicación de goles. |
+| Patada | Velocidad horizontal inicial objetivo de 1200 px/s (antes 900), con la potencia extra disipada suavemente durante 500 ms de física activa. Impulso vertical de 650 px/s, alcance de 100 px y espera de 400 ms conservados. Sustituye la velocidad entrante en ambas direcciones; sin contactos, baja hasta 900 px/s, sin modificador permanente. Desde el suelo, conserva el arco de unos 120 px, el reloj y la adjudicación de goles. |
 | Seguridad | Velocidad total de pelota limitada a 1400 px/s antes de integrar y después de contactos; física en subpasos de hasta 1/120 s y límite de 100 ms por cuadro, sin recortar el reloj. |
+
+La disipación multiplica la velocidad horizontal actual por la razón entre dos valores consecutivos de una envolvente lineal 1200→900. Nunca empuja hacia una velocidad objetivo ni añade energía: conserva el sentido y las pérdidas de los rebotes/contactos, también tras una proyección cercana al pie que ya se separa. No modifica la velocidad vertical ni la restitución de 0,92; el arrastre de rodadura y el límite vectorial siguen actuando normalmente. Solo hay una cuenta de tiempo de física: la pausa la congela, un cuadro largo consume como máximo 100 ms de disipación, una nueva patada válida la reinicia y cada saque/revancha la borra.
 
 Se priorizan rebotes vivos, rodadura predecible y contactos estables; no se agregan ajustes ni poderes. Que resulte **divertido necesita comentarios de usuarios reales**: una prueba unitaria demuestra resultados deterministas, no diversión ni respuesta física del dispositivo.
 
@@ -92,7 +94,7 @@ El texto usa Arial / sans-serif disponible localmente mediante el lienzo de Phas
 
 ## Verificación y pruebas reales
 
-Modelo, contactos, goles y TV: `node --import tsx --test tests/ball-contacts.test.ts tests/goals-physics.test.ts tests/game.test.ts tests/tv-game.test.ts tests/tv-ui.test.ts`. Renderizado: `node --import tsx --test tests/render.test.ts`. TypeScript: `npm run typecheck`.
+Descenso y patada transitoria: `node --import tsx --test tests/jump-fall.test.ts tests/kick-boost.test.ts tests/kick-height.test.ts`. Comprueban ambos sentidos a 30/60 Hz, subida/ápice conservados, disipación de 500 ms, rebotes y contactos sin energía añadida, proyección junto al pie, pausa y reinicio. Modelo, contactos, goles y TV: `node --import tsx --test tests/ball-contacts.test.ts tests/goals-physics.test.ts tests/game.test.ts tests/tv-game.test.ts tests/tv-ui.test.ts`. Renderizado: `node --import tsx --test tests/render.test.ts`. TypeScript: `npm run typecheck`.
 
 Las regresiones públicas cubren un corredor contra un rival quieto, ambos presionando, espejos y orden de jugadores, presión sostenida y liberación, cuerpo/cabeza/esquina junto al suelo y paso bajo un jugador elevado. También comprueban correr + Saltar inmediatamente o tras doce subpasos de presión, P1/P2 en ambos sentidos, el vuelo normal completo sin salto automático al aterrizar y Patear bajo bloqueo con espera y nueva pulsación. Verifican separación en cada subpaso observable, velocidad acotada y ausencia de goles o cambios de reloj/controles inesperados; no sustituyen la prueba física.
 
