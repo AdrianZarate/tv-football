@@ -29,8 +29,8 @@ class Element {
 const last = <T>(values: T[]): T => values[values.length - 1]!;
 let bundled: Promise<string> | undefined;
 /** Browser API facade, not a layout engine. Execute the actual bundled phone entrypoint. */
-export async function createPhone(source?: string, options: { visual?: boolean; saved?: [string, string][]; search?: string; denied?: boolean; protocol?: string; hostname?: string } = {}) {
-  const html = await readFile('controller/index.html', 'utf8');
+export async function createPhone(source?: string, options: { visual?: boolean; saved?: [string, string][]; search?: string; denied?: boolean; protocol?: string; hostname?: string; markup?: string } = {}) {
+  const html = options.markup ?? await readFile('controller/index.html', 'utf8');
   const elements = new Map<string, Element>();
   const controls: Element[] = [];
   const root = new Element();
@@ -219,26 +219,26 @@ test('background releases all inputs and reconnect shows truthful HUD, preservin
   h.el('#ready').emit('click'); assert.deepEqual(last(resumed.sent), { type: 'ready' });
 });
 
-function contractSnapshot(label: string, h: Awaited<ReturnType<typeof createPhone>>, compareHud = true) {
+function contractSnapshot(label: string, h: Awaited<ReturnType<typeof createPhone>>) {
   return {
     label,
     sockets: h.sockets.map(ws => ({ url: ws.url, state: ws.readyState, closes: ws.closeCalls, sent: structuredClone(ws.sent) })),
     saved: [...h.saved], storageCalls: structuredClone(h.storageCalls),
     controls: h.controls.map(button => ({ disabled: button.disabled, held: button.dataset.held, captured: [...button.captured] })),
     ready: { disabled: h.el('#ready').disabled, hidden: h.el('#ready').hidden, text: h.el('#ready').textContent },
-    joinDisabled: h.el('#join').disabled,
-    status: h.el('#status').textContent.replace(/ \(P[12] (?:azul|naranja)\)/, ''),
+    joinDisabled: h.el('#join').disabled, joinHidden: h.el('#join-form').hidden,
+    status: h.el('#status').textContent,
     storageStatus: h.el('#storage-status').textContent,
-    // Only requested presentation changes are normalized, never messages, keys or counters.
-    hud: compareHud ? h.el('#game-status').textContent.replace(/^P1 azul: (\d+) · P2 naranja: (\d+)/, '$1 – $2') : '(terminal/reconnecting HUD intentionally changed)',
+    // This redesign changes layout only: compare even terminal/recovery text exactly.
+    hud: h.el('#game-status').textContent,
   };
 }
 
 /** Runtime differential callers can supply an independently bundled entrypoint; no git history in tests. */
-export async function phoneContract(source?: string) {
+export async function phoneContract(source?: string, markup?: string) {
   const outcomes: ReturnType<typeof contractSnapshot>[] = [];
-  const capture = (label: string, h: Awaited<ReturnType<typeof createPhone>>, compareHud = true) => outcomes.push(contractSnapshot(label, h, compareHud));
-  const h = await createPhone(source);
+  const capture = (label: string, h: Awaited<ReturnType<typeof createPhone>>) => outcomes.push(contractSnapshot(label, h));
+  const h = await createPhone(source, { markup });
   h.el('#room').value = 'bad'; h.el('#join-form').emit('submit'); capture('invalid-code', h);
   const ws = h.join(); ws.message({ ...playing, phase: 'lobby' }); h.el('#ready').emit('click'); capture('joined-ready-P2', h);
   ws.message(playing);
@@ -250,29 +250,29 @@ export async function phoneContract(source?: string) {
   h.controls[2]!.emit('pointerdown', { pointerId: 4 }); h.window.emit('blur');
   h.tick(1000); ws.message({ type: 'pong', id: 1 }); ws.message({ type: 'probeAck', id: 1 }); capture('pointer-release-blur-diagnostics', h);
   h.controls[0]!.emit('pointerdown', { pointerId: 5 }); h.controls[3]!.emit('pointerdown', { pointerId: 6 });
-  h.document.hidden = true; h.document.emit('visibilitychange'); h.advance(1000); capture('hidden-release-no-attempt', h, false);
+  h.document.hidden = true; h.document.emit('visibilitychange'); h.advance(1000); capture('hidden-release-no-attempt', h);
   h.document.hidden = false; h.document.emit('visibilitychange'); h.advance(0);
-  const resumed = h.sockets[1]!; resumed.emit('open'); resumed.message({ type: 'joined', slot: 2 }); capture('resume-awaits-key', h, false);
+  const resumed = h.sockets[1]!; resumed.emit('open'); resumed.message({ type: 'joined', slot: 2 }); capture('resume-awaits-key', h);
   resumed.message({ type: 'resumeKey', key: 'b'.repeat(64) }); resumed.message({ ...playing, phase: 'paused' });
   h.el('#ready').emit('click'); capture('rotated-paused-confirmation', h);
   h.window.emit('pagehide'); h.window.emit('pageshow'); h.advance(1000);
-  const busy = h.sockets[2]!; busy.emit('open'); busy.message({ type: 'error', code: 'resume_busy' }); capture('pagehide-pageshow-resume-busy', h, false);
-  h.advance(60000); h.tick(1000); capture('sixty-second-deadline', h, false);
+  const busy = h.sockets[2]!; busy.emit('open'); busy.message({ type: 'error', code: 'resume_busy' }); capture('pagehide-pageshow-resume-busy', h);
+  h.advance(60000); h.tick(1000); capture('sixty-second-deadline', h);
 
-  const reload = await createPhone(source, { saved: [['tv-football:resume:ABCD2345', 'b'.repeat(64)]], search: '?room=ABCD2345' });
+  const reload = await createPhone(source, { markup, saved: [['tv-football:resume:ABCD2345', 'b'.repeat(64)]], search: '?room=ABCD2345' });
   const reloaded = reload.sockets[0]!; reloaded.emit('open'); reloaded.message({ type: 'joined', slot: 2 }); capture('reload-awaits-rotation', reload);
   reloaded.message({ type: 'resumeKey', key: 'c'.repeat(64) }); reloaded.message({ ...playing, phase: 'paused' }); capture('reload-rotated-paused', reload);
-  reloaded.message({ type: 'error', code: 'room_unavailable' }); capture('room-lost-clears-key', reload, false);
+  reloaded.message({ type: 'error', code: 'room_unavailable' }); capture('room-lost-clears-key', reload);
 
-  const denied = await createPhone(source, { denied: true }); const volatile = denied.join(); volatile.emit('close'); denied.advance(1000);
-  denied.sockets[1]!.emit('open'); capture('storage-denied-volatile-resume', denied, false);
-  const rejected = await createPhone(source); const invalid = rejected.join(); invalid.message(playing);
-  invalid.message({ ...playing, score: [-1, 2] }); capture('rejected-message-retains-key-releases', rejected, false);
-  const legacy = await createPhone(source);
+  const denied = await createPhone(source, { markup, denied: true }); const volatile = denied.join(); volatile.emit('close'); denied.advance(1000);
+  denied.sockets[1]!.emit('open'); capture('storage-denied-volatile-resume', denied);
+  const rejected = await createPhone(source, { markup }); const invalid = rejected.join(); invalid.message(playing);
+  invalid.message({ ...playing, score: [-1, 2] }); capture('rejected-message-retains-key-releases', rejected);
+  const legacy = await createPhone(source, { markup });
   legacy.el('#room').value = 'ABCD2345'; legacy.el('#join-form').emit('submit');
   const probe = legacy.sockets[0]!; probe.emit('open'); probe.message({ type: 'joined', slot: 1 }); capture('legacy-assignment', legacy);
-  probe.emit('close'); legacy.advance(60000); legacy.tick(1000); capture('legacy-close-no-recovery', legacy, false);
-  const insecure = await createPhone(source, { protocol: 'http:' });
+  probe.emit('close'); legacy.advance(60000); legacy.tick(1000); capture('legacy-close-no-recovery', legacy);
+  const insecure = await createPhone(source, { markup, protocol: 'http:' });
   insecure.el('#room').value = 'ABCD2345'; insecure.el('#join-form').emit('submit'); capture('insecure-rejected', insecure);
   return outcomes;
 }
@@ -298,6 +298,59 @@ test('preservation: public phone workflow keeps validation, neutral release, six
   assert.equal(at('legacy-close-no-recovery').sockets.length, 1); assert.equal(at('legacy-close-no-recovery').ready.hidden, true);
 });
 
+// Stylesheet contracts describe design intent, not measured layout or physical comfort.
+const rule = (css: string, selector: string) => {
+  const start = css.indexOf(`${selector} {`);
+  assert.notEqual(start, -1, `Missing stylesheet rule ${selector}`);
+  return css.slice(start, css.indexOf('}', start) + 1);
+};
+
+test('thumb-zone contract anchors compact left/right groups low, before the progressive help footer', async () => {
+  const css = await readFile('controller/style.css', 'utf8');
+  const html = await readFile('controller/index.html', 'utf8');
+  assert.match(rule(css, '#controls'), /margin-top:\s*auto/);
+  assert.match(rule(css, '#controls'), /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/);
+  assert.match(rule(css, '#controls > div'), /max-width:\s*248px/);
+  assert.match(rule(css, '.movement'), /justify-self:\s*start/);
+  assert.match(rule(css, '.actions'), /justify-self:\s*end/);
+  assert.ok(html.indexOf('id="controls"') < html.indexOf('<details>'), 'controls precede help in the established reading/focus order');
+  assert.match(rule(css, 'body'), /flex-direction:\s*column;/);
+  for (const selector of ['.connection-panel', '#controls', 'details']) assert.doesNotMatch(rule(css, selector), /(?:^|[;\s])order\s*:/);
+});
+
+test('target contract retains 64px floors, enlarges roomy targets and tightens only short landscape', async () => {
+  const css = await readFile('controller/style.css', 'utf8');
+  const buttons = rule(css, '#controls button');
+  assert.match(buttons, /min-width:\s*64px/); assert.match(buttons, /min-height:\s*64px/);
+  assert.match(buttons, /max-width:\s*112px/); assert.match(buttons, /width:\s*100%/);
+  assert.match(buttons, /aspect-ratio:\s*1/);
+  assert.match(rule(css, '#controls'), /gap:\s*clamp\(24px, 7vw, 120px\)/);
+  assert.match(rule(css, '#controls > div'), /gap:\s*8px/);
+  assert.match(css, /@media \(orientation: landscape\) and \(max-height: 500px\)/);
+  assert.match(css, /--control-size:\s*clamp\(64px, calc\(var\(--visible-height, 100dvh\) \* 0\.27\), 88px\)/);
+  assert.match(buttons, /touch-action:\s*none/);
+  assert.doesNotMatch(rule(css, 'body'), /touch-action:\s*none/);
+});
+
+test('feedback contract distinguishes held, disabled and keyboard-focus states without motion', async () => {
+  const css = await readFile('controller/style.css', 'utf8');
+  const held = rule(css, '#controls button[data-held="true"]');
+  for (const effect of [/background:/, /color:/, /border-color:/, /box-shadow:/]) assert.match(held, effect);
+  assert.match(rule(css, 'button:disabled'), /border-style:\s*dashed/);
+  assert.match(css, /button:focus-visible, input:focus-visible, summary:focus-visible\s*\{[^}]*outline:/);
+  assert.doesNotMatch(css, /(?:animation|transition|(?:backdrop-)?filter)\s*:|@keyframes/);
+});
+
+test('twilight art contract uses original static ink/blue/orange/gold panels, without assets or filters', async () => {
+  const css = await readFile('controller/style.css', 'utf8');
+  assert.match(rule(css, ':root'), /--ink:\s*#0b1424/);
+  assert.match(rule(css, 'html'), /radial-gradient\([\s\S]*linear-gradient\(/);
+  assert.match(rule(css, '.connection-panel'), /background:\s*linear-gradient\(/);
+  assert.match(rule(css, '#controls'), /background:\s*linear-gradient\(/);
+  for (const color of ['#78bbff', '#ffad74', '#efc35c']) assert.ok(css.includes(color), color);
+  assert.doesNotMatch(css, /url\(|(?:backdrop-)?filter\s*:/);
+});
+
 test('presentation CSS consumes the actual entrypoint height and keeps overflow local, without suppressing zoom', async () => {
   const css = await readFile('controller/style.css', 'utf8');
   const html = await readFile('controller/index.html', 'utf8');
@@ -307,5 +360,9 @@ test('presentation CSS consumes the actual entrypoint height and keeps overflow 
   assert.doesNotMatch(css, /min-height:\s*100vh|margin:\s*auto 0 0/);
   assert.doesNotMatch(html, /user-scalable|maximum-scale|minimum-scale/);
   assert.match(html, /class="connection-panel"/);
+  for (const edge of ['top', 'right', 'bottom', 'left']) assert.ok(css.includes(`env(safe-area-inset-${edge})`), edge);
+  assert.match(rule(css, 'body'), /overflow:\s*hidden/);
+  assert.match(rule(css, '.connection-panel'), /min-height:\s*0/);
+  assert.match(rule(css, 'details'), /max-height:\s*clamp\(44px, calc\(var\(--visible-height, 100dvh\) \* 0\.24\), 180px\)/);
   // These source checks do not establish browser geometry or real-device fit.
 });

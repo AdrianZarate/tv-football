@@ -62,6 +62,18 @@ test('TV and phone static markup is Spanish, accessible and explains diagnostics
   for (const word of ['Izquierda', 'Derecha', 'Saltar', 'Patear', 'Listo para jugar', '60 segundos', '120 muestras']) assert.ok(phone.includes(word), word);
 });
 
+test('thumb controls keep four explicit Spanish names, semantic groups and local decorative icons', async () => {
+  const html = await readFile('controller/index.html', 'utf8');
+  const buttons = [...html.matchAll(/<button\b[^>]*data-control="([^"]+)"[^>]*>([\s\S]*?)<\/button>/g)];
+  assert.deepEqual(buttons.map(button => button[1]), ['left', 'right', 'jump', 'kick']);
+  for (const [index, label] of ['Izquierda', 'Derecha', 'Saltar', 'Patear'].entries()) {
+    assert.match(buttons[index]![2]!, new RegExp(`class="control-label">${label}<`));
+    assert.match(buttons[index]![2]!, /aria-hidden="true"/);
+  }
+  for (const group of ['Movimiento', 'Acciones']) assert.ok(html.includes(`role="group" aria-label="${group}"`));
+  assert.ok(html.indexOf('id="controls"') < html.indexOf('<details>'), 'Spanish controls retain their position before progressive help');
+});
+
 async function controller() {
   class Element {
     private text = ''; children: Element[] = [];
