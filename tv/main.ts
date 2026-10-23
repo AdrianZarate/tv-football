@@ -1,7 +1,6 @@
-import Phaser from 'phaser';
 import QRCode from 'qrcode';
-import { GameScene } from '../game/scene.js';
-import { FIELD } from '../game/model.js';
+import { createCanvasRenderer } from './canvas-renderer.js';
+import { FrameLoop } from './frame-loop.js';
 import { FootballHost, describeMatch, formatClock } from './host.js';
 import { type ClientMessage } from '../shared/protocol.js';
 import { RttWindow } from '../shared/metrics.js';
@@ -31,10 +30,37 @@ let lastMessage = 0;
 let code = '';
 // Initial visibility is not room loss. Only a created response completes first launch.
 let initialRoomPending = true;
+let waitingForInitialVisibility = false;
 let pageHidden = false;
 const hidden = () => document.hidden || pageHidden;
 const frameIntervals: number[] = [];
 const host = new FootballHost(send, () => performance.now());
+let view: ReturnType<typeof createCanvasRenderer> | undefined;
+let renderFailed = false;
+let lastUpdate = performance.now();
+let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+let scheduledDeadline = Infinity;
+const frames = new FrameLoop(now => {
+  const delta = now - lastUpdate;
+  lastUpdate = now;
+  if (debug && delta > 0 && delta < 2000) {
+    frameIntervals.push(delta); if (frameIntervals.length > 120) frameIntervals.shift();
+  }
+  // The host settles its monotonic cursor; neither RAF timestamps nor deltas add time.
+  host.update(0);
+  renderStatus(false);
+  try {
+    view ??= createCanvasRenderer(document.querySelector<HTMLElement>('#stage')!);
+    view.draw(host.snapshot());
+  } catch {
+    renderFailed = true;
+    view?.destroy(); view = undefined;
+    const error = document.querySelector<HTMLElement>('#render-error')!;
+    text(error, 'No se pudo dibujar la cancha. Podés crear otra sala o salir de la aplicación.');
+    error.hidden = false;
+    frames.update(false, false, false); // No automatic graphics retries, including new rooms.
+  }
+});
 document.querySelector('#controller-url')!.textContent = publicOrigin;
 if (debug) text(document.querySelector<HTMLElement>('#endpoint')!, `Servidor de enlace: ${relayUrl} · La TV no recupera partidas terminadas`);
 
@@ -54,7 +80,7 @@ function clearGoal() {
   goalBanner.hidden = true;
   text(goalBanner, '');
 }
-function renderStatus() {
+function renderStatus(dirty = true) {
   const state = host.snapshot();
   const now = performance.now();
   text(clock, formatClock(state.remainingMs));
@@ -74,6 +100,22 @@ function renderStatus() {
   if (code) text(status, describeMatch(state, now));
   // Collapse only once play begins. The full logical pitch is always visible, never cropped.
   if (document.body.dataset.phase !== state.phase) document.body.dataset.phase = state.phase;
+  frames.update(state.phase === 'playing', !hidden() && !renderFailed, dirty);
+  // Exactly one boundary timer: no frame chain in pause, no one-second deadline slack.
+  const deadline = hidden() ? Infinity : Math.min(
+    state.disconnectDeadlineMs ?? Infinity,
+    goalUntil || Infinity,
+    state.phase === 'playing' ? now + state.remainingMs : Infinity,
+  );
+  if (deadline !== scheduledDeadline) {
+    if (deadlineTimer !== undefined) clearTimeout(deadlineTimer);
+    deadlineTimer = undefined; scheduledDeadline = deadline;
+    if (Number.isFinite(deadline)) deadlineTimer = setTimeout(() => {
+      deadlineTimer = undefined; scheduledDeadline = Infinity;
+      host.update(0);
+      renderStatus(false);
+    }, Math.max(0, deadline - now));
+  }
 }
 function stop(message: string) {
   const old = socket;
@@ -86,7 +128,11 @@ function stop(message: string) {
 }
 function newRoom() {
   stop('Conectando con el servidor de juego…');
-  if (hidden()) { status.textContent = 'Volvé a la aplicación de TV para conectar. Si la sala terminó, seleccioná Nueva sala.'; return; }
+  if (hidden()) {
+    waitingForInitialVisibility = initialRoomPending;
+    status.textContent = 'Volvé a la aplicación de TV para conectar. Si la sala terminó, seleccioná Nueva sala.'; return;
+  }
+  waitingForInitialVisibility = false;
   const current = generation = host.newRoom();
   relayRtt = new RttWindow(); frameIntervals.length = 0;
   renderStatus();
@@ -134,33 +180,6 @@ function newRoom() {
   });
 }
 
-/** Single write thread: advance the TV model once, then draw that exact snapshot. */
-class HostedGameScene extends GameScene {
-  private lastUpdate = performance.now();
-  constructor() { super(() => host.snapshot()); }
-  update(): void {
-    // Phaser may smooth/clamp its delta; the match clock needs the full active interval.
-    const now = performance.now();
-    const delta = now - this.lastUpdate;
-    this.lastUpdate = now;
-    if (debug && delta > 0 && delta < 2000 && !hidden()) {
-      frameIntervals.push(delta); if (frameIntervals.length > 120) frameIntervals.shift();
-    }
-    host.update(delta / 1000);
-    super.update();
-    renderStatus();
-  }
-}
-new Phaser.Game({
-  type: Phaser.AUTO, width: FIELD.width, height: FIELD.height,
-  parent: 'stage', backgroundColor: '#172940', scene: [new HostedGameScene()],
-  // Phaser 3.90 uses these logical dimensions directly, with CSS-only FIT scaling (no DPR multiplier).
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH, zoom: 1 },
-  audio: { noAudio: true },
-  fps: { target: 30, limit: 30 },
-  render: { antialias: true, antialiasGL: false },
-  input: { keyboard: false }, // Phones own gameplay input; DOM owns the remote button.
-});
 let enterHeld = false;
 let suppressNativeClick = false;
 const isEnter = (event: KeyboardEvent) => event.key === 'Enter' || (!event.key && event.keyCode === 13);
@@ -197,6 +216,7 @@ button.focus();
 // TV loss ends the room; only phones can resume an existing player session.
 function foreground() {
   if (!hidden() && initialRoomPending && !socket) newRoom();
+  renderStatus();
   restoreFocus();
 }
 window.addEventListener('pagehide', () => {
@@ -210,6 +230,8 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => {
   const now = performance.now(); relayRtt.expire(now);
+  // A missed initial visibility event gets one existing-heartbeat recovery, not reconnect polling.
+  if (waitingForInitialVisibility && !hidden()) foreground();
   if (socket && !hidden()) {
     if (now - lastMessage > 6000) stop('El servidor dejó de responder. Revisá la red y seleccioná Nueva sala.');
     else if (socket.readyState === WebSocket.OPEN) {
@@ -217,6 +239,8 @@ setInterval(() => {
       if (relayRtt.begin(id, now)) send({ type: 'ping', id });
     }
   }
+  // Preserve public status heartbeats/countdowns even when idle has no render frames.
+  if (code && !hidden()) { host.update(0); renderStatus(false); }
   if (!debug) return;
   text(document.querySelector<HTMLElement>('#relay-rtt')!, `RTT de aplicación TV ↔ servidor: ${formatRttSpanish(relayRtt)}`);
   const sorted = [...frameIntervals].sort((a, b) => a - b);

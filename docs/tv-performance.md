@@ -1,61 +1,62 @@
-# Menos trabajo de dibujo y Nueva sala con el control remoto
+# TV ligera: Canvas2D sin motor gráfico
 
-La TV muestra un estadio original al atardecer y conserva los personajes, los límites de juego y un único marcador, reloj y estado fuera del lienzo. **La reducción de trabajo en el código no demuestra la causa del retraso del volumen en webOS ni garantiza una mejora de FPS o latencia.** Esa comparación requiere la TV real.
+La variante de recuperación prepara una cancha simple con Canvas2D nativo. La entrada de TV ya no importa Phaser ni la escena anterior; conserva la física, los controles móviles, el marcador y las reglas de 0.2.4. **La causa de la lentitud real sigue sin confirmar: esto no garantiza recuperar el volumen, el apagado ni la fluidez de webOS.** No autoriza publicar, instalar ni repetir diagnósticos de TV.
 
-## Uso
+## Uso y límites
 
-1. Conectá los dos teléfonos con el QR o con la dirección y el código de sala.
-2. Ambos jugadores deben pulsar Listo para jugar. El estado informa la pausa, la reconexión y la revancha.
-3. Para empezar otra sala, seleccioná Nueva sala y pulsá Enter/OK, o hacé clic. Mantener Enter pulsado no crea salas sucesivas. Si el foco está en la cancha, Enter también selecciona Nueva sala.
+1. Conectá dos teléfonos mediante el QR o la dirección y el código de sala. Ambos deben pulsar Listo para jugar.
+2. Nueva sala admite clic y Enter/OK desde el botón o la cancha. Mantener Enter y su clic nativo duplicado no reemplazan varias salas. Las otras teclas no se cancelan.
+3. Una superposición que solo quite el foco no termina la partida. Pasar realmente a segundo plano o cerrar sí termina la sala; volver no recupera una sala ya creada.
 
-Al volver de una superposición transitoria, Nueva sala recupera el foco si estaba en el botón o la cancha. El foco de otros controles se respeta. Perder solamente el foco no termina una partida. Pasar realmente a segundo plano o cerrar la aplicación sí termina la sala: no hay recuperación de partidas de TV.
+El primer inicio oculto espera hasta estar visible. Si falta el evento inicial de visibilidad, el temporizador de red existente puede detectar esa primera vuelta; no reintenta conexiones fallidas continuamente. Los sockets y QR viejos no pueden modificar una sala nueva.
 
-## Qué se verificó y qué no
+Si Canvas2D falta o falla, aparece «No se pudo dibujar la cancha. Podés crear otra sala o salir de la aplicación.». La red y Nueva sala siguen disponibles; no se reintenta el dibujo automáticamente, tampoco al crear otra sala. Para volver a intentar gráficos hace falta una nueva carga de la aplicación.
 
-| Evidencia de código y pruebas | Límite de la conclusión |
-| --- | --- |
-| Antes se borraba y reconstruía la geometría de los actores en cada actualización, incluso sin movimiento. | No es una medición de saturación de CPU o GPU. |
-| Ahora se generan nueve texturas locales al crear la escena: cancha, cuatro poses, pelota, dos sombras y efecto de patada. Las actualizaciones solo cambian la pose; no generan geometría, texturas ni fuentes. | El coste del compositor, del controlador gráfico y de webOS no se midió. |
-| La escena libera sus imágenes antes de eliminar las texturas. Nueva sala reutiliza la escena, sin crear nuevas texturas. | El consumo total de memoria incluye copias de lienzo, datos de píxeles y memoria del controlador gráfico. |
-| La configuración usa un límite explícito de 30 actualizaciones por segundo y un lienzo de 1280 × 720 sin multiplicar por la densidad de pantalla; conserva la selección automática de renderizador. | El objetivo configurado no es FPS observado. El suavizado de texturas sigue activo; se desactiva el suavizado del contexto WebGL. |
-| El adaptador real de entrada antes dependía solo de clic; ahora Enter crea una sala sin necesitar un clic nativo. Se ignoran la repetición y el clic nativo duplicado. | La prueba usa eventos DOM, no un control remoto físico. No se presupone una identidad para los eventos de volumen de webOS. |
-| Solo Enter propio se cancela. Las demás teclas pasan sin cambios; el teclado de Phaser está desactivado porque los teléfonos manejan el juego. | No prueba que la aplicación anterior consumiera volumen ni que esta versión resuelva su retraso. |
+## Presupuesto de trabajo
 
-Phaser 3.90 no tiene una opción de juego `resolution`: se usan las dimensiones lógicas y ajuste visual por CSS, con `zoom: 1`. El área total de las nueve texturas es inferior a un millón de píxeles; no se cargan dibujos externos ni se convierten en direcciones de imagen. Phaser 3.90 genera las texturas con un lienzo interno y las actualiza una vez para Canvas o WebGL, sin cambiar la política de seguridad. El reloj usa el tiempo monótono de la TV, no el objetivo de FPS. Las actualizaciones del anfitrión continúan durante la pausa para aplicar la cancelación de 60 segundos. No cambian las reglas, los 120 segundos, los goles ni el empate.
+| Área | Implementación y evidencia local | Lo que no demuestra |
+| --- | --- | --- |
+| Arranque | La creación síncrona del socket ocurre antes del primer RAF que crea los lienzos. Una página oculta no crea gráficos. | No prueba que la causa anterior fuera gráfica. |
+| Entrada compilada | Comparación esbuild en memoria contra ff34506, `write:false`, IIFE, destinos chrome70/safari13, sin minificar: **7.083.297 → 113.326 bytes** (aprox. 98,4% menos). El grafo actual tiene 36 entradas, ninguna de Phaser ni `game/scene`. | Comparación de fuentes, no tamaño entregado ni memoria de ejecución. El JavaScript real de producción mide **113.340 bytes** y el IPK **21.852 bytes**. |
+| Recursos | Un lienzo visible y uno de fondo, ambos 1280 × 720, sin multiplicador DPR. **1.843.200 píxeles**, equivalentes a **7,03 MiB RGBA** entre ambos; el fondo solo usa 921.600 píxeles / 3,52 MiB. | No incluye copias del navegador, compositor, QR ni sobrecostes de memoria. |
+| Dibujo inicial | Fondo simple grabado una vez: 12 llamadas de dibujo registradas; primera instantánea: otras 11. Jugadores originales azul/naranja, pelota blanca y arcos en coordenadas físicas. Sin público, luces, fuentes, imágenes externas, audio ni WebGL. | Contar llamadas no mide tiempo de arranque ni calidad visual. |
+| Actualizaciones | Se reutilizan los mismos lienzos. Una pose idéntica no dibuja; una pose distinta copia el fondo y dibuja los tres actores, sin crear cachés ni fuentes. Destruir libera los tamaños de ambos lienzos. | No es una medición de CPU/GPU, FPS ni latencia de pantalla. |
+| Planificación | Como máximo 30 actualizaciones de RAF por segundo mientras se juega, o una actualización sucia pendiente. Sin cadena continua en sala, pausa, fin ni segundo plano. CSS `object-fit: contain` conserva toda la cancha, sin recorte. | Es un límite del algoritmo, no FPS observado ni prueba física de ajuste visual. |
 
-## Estadio al atardecer: detalle sin trabajo por fotograma
+Los manifiestos y dependencias no cambian en esta unidad. La escena Phaser decorativa de 0.2.4 permanece sin uso en la entrada de TV para compatibilidad y sus pruebas históricas; sus nueve texturas de 961.232 píxeles y 783 operaciones iniciales **no son el renderizador actual**.
 
-El fondo combina cielo de bandas cálidas, sol y siluetas de edificios lejanos; tres gradas con público estático, pasillos y barandas; dos torres con haces de luz tenues; y césped a franjas con marcas y borde en profundidad. La paleta de tinta oscura, azul y naranja con luces cálidas conecta el estadio con los mandos. Son formas originales, sin gráficos licenciados ni recursos externos.
+## Tiempo y ciclo de vida
 
-Todo se dibuja **una sola vez en la textura de cancha existente de 1280 × 720**. El público y las luces no se animan. No se agregan texturas, fuentes, filtros ni sombreadores. Las nueve texturas siguen sumando exactamente **961.232 píxeles** (unos 3,67 MiB de píxeles RGBA, sin contar copias ni sobrecostes del motor). El detalle aumenta las operaciones de dibujo al crear la escena, no las de sus actualizaciones.
+`FootballHost` sigue siendo la única autoridad de tiempo monótono y simulación. No se suman deltas de RAF ni se simulan segundos ficticios en temporizadores. El partido conserva 120 segundos activos, lease de entrada de 350 ms, goles, empate y confirmaciones de ambos jugadores para inicio, revancha y reanudación.
 
-| Contrato comprobado por la escena pública | Validación visual pendiente |
-| --- | --- |
-| Bandas de cielo, silueta, tres filas acotadas de público, dos luces y césped quedan grabados en la textura de cancha. La creación tiene un techo de 1.200 operaciones registradas. | Composición, atractivo y contraste percibido requieren inspección en navegador y TV; contar formas no demuestra calidad visual. |
-| Se conservan coordenadas de campo, bocas de arco y poses de pelota/jugadores. Las decoraciones quedan detrás de los arcos; la zona baja usa un fondo tranquilo. | Comprobar que pelota blanca, camisetas azul/naranja y ambos arcos se distingan durante saltos, goles y movimiento. |
-| Reposo, movimiento, gol, pausa y fin no crean geometría, imágenes, texturas ni texto. Al cerrar se destruyen imágenes antes de liberar texturas; una escena nueva reproduce el mismo fondo. | La prueba estructural no mide FPS, latencia, memoria GPU total ni el coste inicial de dibujar el estadio en webOS. |
+Un único timeout cancelable apunta al próximo límite real: vencimiento de los 60 segundos de reconexión, fin del partido o fin de los 1200 ms del anuncio de gol. Así no se necesitan fotogramas de pausa ni se agrega un segundo de tolerancia. El heartbeat de red existente conserva los estados públicos y el contador de pausa sin redibujar. El anuncio corresponde al incremento de marcador acreditado por el modelo, incluso si se liquida justo al desconectar; no se duplica y se limpia en reinicios y estados terminales.
 
-Para repetir solo la comprobación estructural: `node --import tsx --test tests/render.test.ts`. Se registraron **783 operaciones iniciales frente a 310 del fondo anterior**, con los mismos 961.232 píxeles y cero operaciones de dibujo durante las actualizaciones. La comparación de ambas escenas conservó poses, texturas y liberación/recreación; solo cambió el dibujo inicial de cancha. El doble de Phaser registra llamadas públicas, no tiempos de ejecución ni calidad visual, y no sustituye la inspección con el renderizador real.
+## Comprobaciones repetibles
 
-## Evidencia 0.2.4: lienzo real sin veredicto visual
+- Entrada real, renderer, RAF, anfitrión, física y escena histórica: `node --import tsx --test tests/tv-ui.test.ts tests/canvas-renderer.test.ts tests/tv-frame-loop.test.ts tests/tv-game.test.ts tests/game.test.ts tests/ball-contacts.test.ts tests/render.test.ts`.
+- Suite: `npm test`. Tipos: `npm run typecheck`.
+- La comparación temporal de ff34506 se ejecutó en memoria, sin pruebas comprometidas que lean Git: 23 puntos públicos idénticos de DOM, fase, mensajes, contadores de socket/QR y teclas; otra comparación confirmó 9 instantáneas públicas completas idénticas con gol acreditado, lease, pausa, anuncio, reanudación, ganador y revancha. En ambas, stdout idéntico, stderr vacío y salida 0 en ambos procesos. Se excluyeron solamente las operaciones internas de dibujo del registro comparado, no reloj, preparación ni mensajes públicos.
+- Escritor/raíz: enfoque 110/110, suite completa 184/184 y tipos sin errores, con salida 0 y límite exterior de 30 segundos por comando. Esos resultados siguen vigentes: los hashes protegidos de base/fuentes coinciden antes y después de la verificación independiente.
+- Verificador independiente: enfoque 110/110, salida 0 y stderr vacío; sin bloqueo de software reproducido para S1–S3. Tipos salió 1 por entorno: `tsc` no encontrado porque el scratch omitió `.bin` de Windows, sin diagnósticos TypeScript ni reintento. No equivale a un fallo del producto ni a que todos los comandos salieran 0.
+- Sondas independientes: primero 2/3; la única falla exigía erróneamente cero RAF pendientes cuando se debía permitir el último dibujo sucio. Corregida esa aserción temporal, la sonda dirigida pasó 1/1, sin cambiar el producto. Cubrieron fallo `drawImage` enclavado/liberación de cachés/sin reasignación al preparar o crear sala, estados públicos cada segundo (119000/118000/117000 ms) sin dibujo, vencimiento sin RAF, reanudación fraccionaria, lease exacto de 350 ms y sustitución de plazos viejos. El timeout preparatorio de inspección `du` no fue verificación de la app y no se reintentó.
+- El adaptador de pruebas conserva las comprobaciones públicas anteriores; las aserciones de configuración/texturas Phaser de la entrada pasan a dimensiones, identidad de caché nativa y RAF cancelable. Las pruebas de `tests/render.test.ts` permanecen intactas.
 
-Según el padre, las comprobaciones funcionales finales pasaron: suite 174/174 y tipos sin errores; tras corregir el bloqueo de salto inicial, la verificación independiente del código actual pasó 10/10 sondas de salto original/espejado, límites estrictos y caducidad, más 28/28 contactos, salida 0 y sin stderr. Hash de fuente validada: `b25b3f2f8f76fccafc31b67565a728a1e2573f3a`; no se modificó la fuente después. Evaluación final: riesgo medio con escalamiento del ítem 3, `reviewDue: false`; no se inició revisión nativa. Los fallos iniciales de suite y preparación temporal son antecedentes, no fallos funcionales actuales.
+El diagnóstico `?debug=1` reutiliza el heartbeat existente para RTT y percentiles de intervalos de actualización. No mide latencia botón-pantalla ni respuesta del volumen. La vista normal no calcula percentiles.
 
-El job 3 regeneró producción HTTPS, IPK 0.2.4 con el mismo ID `com.systemautomatic.tvfootball.probe` y preview loopback; reemplaza los artefactos obsoletos del job 2 previo a la corrección. Docker local `tv-football-polish-024:local`, con runtime `--network none`, respondió HTTP 200 y cuerpo exacto `{"ok":true}`, salida 0. Avisos conocidos requiredACG/DEP0190 sin cambios. Son resultados locales atribuidos al padre, no una publicación ni una medición de TV.
+## Evidencia local final 0.2.5
 
-La ronda 03 intentó una sola captura, primero de TV. Falló en `Page.captureScreenshot` con `CdpRequestTimeoutError` tras unos 17 segundos, salida 1; no llegó al límite exterior de 45 segundos. Antes solo se observó el lienzo Phaser real en DOM: 1280 × 720 lógicos, rectángulo 1072 × 603 en x28/y206, viewport 1440 × 900, DPR1 y fase Lobby. **Eso prueba límites, no una imagen, contraste ni calidad visual del estadio.** La captura del teléfono no se intentó. No hubo reintento, alternativa, migración, espacio nuevo ni finalización forzada del espacio con error. El espacio Ego 6 conserva p1 teléfono/p2 TV; el padre detuvo su servidor loopback del job 4.
+El padre completó job11 con salida 0: `npm run build`, paquete TV 0.2.5, preview loopback y Docker local `tv-football-lightweight-025:local` con `--network none`; salud HTTP 200 y cuerpo exacto `{"ok":true}`. ID conservado: `com.systemautomatic.tvfootball.probe`. Los avisos conocidos requiredACG/DEP0190 permanecen. Es preparación local, sin publicación ni instalación.
 
-La prueba visual no está disponible: T4 sigue bloqueada hasta que el usuario elija autorizar publicación 0.2.4 para inspección manual o esperar reparación del navegador. No hay más verificaciones autorizadas ni aceptación física; la aprobación anterior solo cubría 0.2.3.
+Job13 del padre ejecutó **una comprobación funcional nueva y local de 0.2.5**, salida 0 tras aproximadamente un segundo. El archivo existente `artifacts/lightweight-recovery-0.2.5/browser-results.json` registra `success: true`, espacio 7, página visible de 1280×900/DPR1, sala presente y lobby con 02:00, P1 azul: 0/P2 naranja: 0, error gráfico oculto y un lienzo Canvas2D nativo lógico de 1280×720. El padre confirmó sala/QR creados.
 
-## Diagnóstico opcional
+- Caja de lienzo/escenario: x28/y132, 912×752; contenido centrado con `contain`: x28/y251,5, 912×513. Las tres comprobaciones de ajuste dieron verdadero.
+- Los 265 píxeles muestreados coincidieron: margen 9, cancha 64, P1 64, P2 64 y pelota 64; regiones distinguibles. Es evidencia de dibujo real por API, no una captura ni aceptación visual de TV.
+- Sin screenshot/exportación, cambios privados del anfitrión, inspección de TV, teléfonos ni flujo de partida. El helper finalizó su espacio una sola vez con SUCCESS; el padre detuvo su preview propio (job12). No es un reintento de la captura 0.2.4 ni del diagnóstico de TV.
 
-La vista normal no muestra información técnica ni calcula percentiles de dibujo. Para una sesión de diagnóstico abrí la página de TV con `?debug=1` y desplegá Diagnóstico de conexión. Los intervalos observados entre actualizaciones y el RTT de mensajes **NO miden la latencia del botón a la pantalla**, la carga de CPU/GPU ni el tiempo de respuesta del volumen del sistema. No se añaden temporizadores de muestreo. Los mensajes de error no muestran valores internos del protocolo ni claves de sesión.
+Evaluación del padre: riesgo medio, escalamiento independiente del ítem 3 y `reviewDue: false`, bajo presupuesto (16 rutas/632 líneas). No hacen falta más comprobaciones completas; quedan los commits/refs del padre, agrupados por comportamiento con sus pruebas y docs sobre la cadena de rama/base ff34506. La fuente validada permanece inmutable.
 
-## Pendiente en la TV real
+## Aceptación física pendiente
 
-- Comparar la respuesta de subir/bajar volumen y silenciar antes y después, tanto en la sala como durante el juego.
-- Comprobar que una pulsación de OK crea una sola sala, que mantenerlo pulsado no la reemplaza y que el clic sigue funcionando.
-- Verificar foco al cerrar la superposición de volumen, QR, aspecto del estadio al atardecer y cancelación al salir realmente de la aplicación.
-- Comprobar contraste de pelota, jugadores y arcos sobre cielo, público y césped en la TV real, sin inferir comodidad ni calidad visual de las pruebas estructurales.
+La captura y el cierre por inspector/SSH anteriores no confirmaron una causa ni el cierre del proceso; esa sesión está agotada y no se repite. El usuario informó lentitud desde el arranque, antes del QR, y respuesta normal fuera del juego. Eso no demuestra saturación de GPU ni un fallo de física.
 
-No se publicó, instaló ni modificó la TV para estas pruebas de código.
+Tras una autorización separada de entrega/instalación, un operador deberá comprobar arranque, QR, volumen, apagado, contraste y juego en la TV real. Las pruebas locales y la preparación de 0.2.5 no sustituyen esa aceptación. No se publicó, instaló ni modificó la TV durante esta unidad.

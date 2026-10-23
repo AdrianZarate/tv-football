@@ -4,6 +4,7 @@ import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import type { MatchOptions } from '../game/model.js';
+import { FootballHost } from '../tv/host.js';
 
 class Events {
   private listeners = new Map<string, ((event: any) => void)[]>();
@@ -24,20 +25,22 @@ class Element extends Events {
   focus() { this.onFocus(); } removeAttribute(name: string) { if (name === 'src') this.src = ''; }
 }
 
-// Bundle the actual entrypoint: only Phaser, QR and browser platform dependencies are mocked.
+// Bundle the actual entrypoint: QR and browser platform dependencies are mocked.
+// Legacy Phaser facade is retained only for the external baseline differential.
 export async function entryBundle(entry = 'tv/main.ts', root = process.cwd(), options?: MatchOptions) {
   return (await build({
     absWorkingDir: root, entryPoints: [entry], bundle: true, write: false, platform: 'browser', format: 'iife',
+    tsconfigRaw: { compilerOptions: { target: 'ES2020', useDefineForClassFields: false } },
     define: { __PUBLIC_ORIGIN__: JSON.stringify('https://tvfootbal.systemautomatic.xyz') },
     plugins: [{ name: 'platform', setup(build) {
       // Supply the existing public host fixture API; transport and model remain real.
-      if (options) {
+      {
         build.onResolve({ filter: /^\.\/host\.js$/ }, () => ({ path: 'host', namespace: 'fixture' }));
         build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ resolveDir: root, contents: `
           import { FootballHost as Host } from './tv/host.ts';
           export { describeMatch, formatClock } from './tv/host.ts';
           export class FootballHost extends Host {
-            constructor(send, now) { super(send, now, ${JSON.stringify(options)}); }
+            constructor(send, now) { super(send, now, ${JSON.stringify(options ?? {})}); globalThis.captureHost(this); }
           }
         ` }));
       }
@@ -46,7 +49,7 @@ export async function entryBundle(entry = 'tv/main.ts', root = process.cwd(), op
     } }],
   })).outputFiles[0]!.text;
 }
-export function browser(bundle: string, initiallyHidden = false, search = '') {
+export function browser(bundle: string, initiallyHidden = false, search = '', canvasSupported = true) {
   const elements = new Map<string, Element>();
   const element = (selector: string) => { if (!elements.has(selector)) elements.set(selector, new Element()); return elements.get(selector)!; };
   let phaseWrites = 0;
@@ -89,9 +92,37 @@ export function browser(bundle: string, initiallyHidden = false, search = '') {
   const qr: { input: string; resolve(value: string): void; reject(): void }[] = [];
   const intervals: (() => void)[] = [];
   let now = 0;
+  let hosted: FootballHost;
+  let nextId = 0;
+  const frames = new Map<number, (time: number) => void>();
+  const timers = new Map<number, { at: number; callback: () => void }>();
+  const canvases: any[] = [];
+  const drawCalls: string[] = [];
+  const context = new Proxy({}, { get: (_target, key: string) => (..._args: any[]) => { drawCalls.push(key); } });
+  Object.assign(document, { createElement: (tag: string) => {
+    assert.equal(tag, 'canvas');
+    const canvas = { width: 0, height: 0, tagName: 'CANVAS', setAttribute() {}, remove() {}, getContext: (kind: string) => {
+      assert.equal(kind, '2d'); return canvasSupported ? context : null;
+    } };
+    canvases.push(canvas); return canvas;
+  } });
+  Object.assign(element('#stage'), { appendChild() {} });
+  const dueTimers = () => {
+    for (let n = 0; n < 20; n++) {
+      const due = [...timers].filter(([, timer]) => timer.at <= now);
+      if (!due.length) return;
+      for (const [id, timer] of due) if (timers.delete(id)) timer.callback();
+    }
+    assert.fail('unbounded timer loop');
+  };
   runInNewContext(bundle, {
     document, window, WebSocket: Socket, TextEncoder, URLSearchParams, location: { search },
+    captureHost: (value: FootballHost) => { hosted = value; },
     performance: { now: () => now }, setInterval: (callback: () => void) => intervals.push(callback),
+    setTimeout: (callback: () => void, delay: number) => { const id = ++nextId; timers.set(id, { at: now + delay, callback }); return id; },
+    clearTimeout: (id: number) => timers.delete(id),
+    requestAnimationFrame: (callback: (time: number) => void) => { const id = ++nextId; frames.set(id, callback); return id; },
+    cancelAnimationFrame: (id: number) => frames.delete(id),
     Phaser: { Scene, AUTO: 0, Scale: { FIT: 0, CENTER_BOTH: 0 }, Game: class {
       constructor(options: any) { config = options; scene = config.scene[0]; scene.create(); }
     } },
@@ -100,6 +131,8 @@ export function browser(bundle: string, initiallyHidden = false, search = '') {
   return {
     element, document, window, sockets, qr, labels, intervals, config,
     phaseWrites: () => phaseWrites, textureCreations: () => textureCreations,
+    canvases, drawCalls, pendingFrames: () => frames.size, pendingTimers: () => timers.size,
+    snapshot: () => JSON.parse(JSON.stringify(hosted.snapshot())) as ReturnType<FootballHost['snapshot']>,
     key(name: string, key = 'Enter', options: Record<string, unknown> = {}) {
       const event = { key, keyCode: key === 'Enter' ? 13 : 0, repeat: false, target: document.activeElement, defaultPrevented: false,
         preventDefault() { this.defaultPrevented = true; }, ...options };
@@ -107,9 +140,14 @@ export function browser(bundle: string, initiallyHidden = false, search = '') {
       return event;
     },
     visible(hidden: boolean) { document.hidden = hidden; document.emit('visibilitychange'); },
-    elapse(milliseconds: number) { now += milliseconds; },
-    frame(milliseconds = 0) { now += milliseconds; scene.update(); },
-    canvas: () => labels.map(label => label.text).join('\n'),
+    elapse(milliseconds: number) { now += milliseconds; dueTimers(); },
+    frame(milliseconds = 0) {
+      now += milliseconds; dueTimers();
+      const pending = [...frames]; frames.clear();
+      for (const [, callback] of pending) callback(now);
+      if (scene) scene.update();
+    },
+    canvas: () => [...labels.map(label => label.text), ...drawCalls.filter(call => call === 'fillText' || call === 'strokeText')].join('\n'),
   };
 }
 const bundle = await entryBundle();
@@ -132,6 +170,42 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
 const created = (ws: ReturnType<typeof browser>['sockets'][number], code = 'ABCD2345') => {
   ws.open(); ws.message({ type: 'created', code });
 };
+
+test('production entry graph has no Phaser or legacy scene', async () => {
+  const result = await build({ entryPoints: ['tv/main.ts'], bundle: true, write: false, metafile: true, platform: 'browser',
+    define: { __PUBLIC_ORIGIN__: JSON.stringify('https://example.test') } });
+  assert.ok(!Object.keys(result.metafile!.inputs).some(path => /phaser|game\/scene/.test(path)));
+});
+
+test('hidden startup creates no native view or RAF; network precedes first graphics', () => {
+  const h = browser(bundle, true);
+  assert.equal(h.canvases.length, 0); assert.equal(h.pendingFrames(), 0);
+  h.frame(1000); assert.equal(h.canvases.length, 0);
+  h.visible(false); assert.equal(h.sockets.length, 1); assert.equal(h.canvases.length, 0);
+  h.frame(); assert.equal(h.canvases.length, 2); assert.equal(h.pendingFrames(), 0);
+  h.visible(true); assert.equal(h.pendingFrames(), 0);
+});
+
+test('initial missed visibility event recovers via existing heartbeat only, never after a created room', () => {
+  const h = browser(bundle, true); h.document.hidden = false;
+  for (const tick of h.intervals) tick();
+  assert.equal(h.sockets.length, 1); created(h.sockets[0]!);
+  h.visible(true); h.document.hidden = false;
+  for (const tick of h.intervals) tick();
+  assert.equal(h.sockets.length, 1);
+});
+
+test('unsupported native drawing reports Spanish failure without retry or room/key loss', () => {
+  const h = browser(bundle, false, '', false); const ws = h.sockets[0]!; created(ws);
+  h.frame(); assert.equal(h.element('#render-error').hidden, false);
+  assert.match(h.element('#render-error').textContent, /No se pudo dibujar la cancha/);
+  const count = h.canvases.length;
+  ws.message({ type: 'state', connected: [true, true] }); ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  for (let i = 0; i < 10; i++) h.frame(100);
+  assert.equal(h.canvases.length, count); assert.equal(h.pendingFrames(), 0); assert.equal(ws.closed, 0);
+  assert.equal(h.key('keydown', 'AudioVolumeUp').defaultPrevented, false);
+  h.key('keydown'); assert.equal(h.sockets.length, 2);
+});
 
 test('actual TV entry defers hidden startup and creates exactly one room at first visibility', async () => {
   const h = browser(bundle, true);
@@ -244,7 +318,9 @@ test('actual TV keeps one Spanish DOM HUD for lobby, play, pause, rematch and ca
 });
 
 test('only explicit debug mode computes and displays Spanish update diagnostics', () => {
-  const h = browser(bundle, false, '?debug=1'); created(h.sockets[0]!); h.frame(33); h.frame(34);
+  const h = browser(bundle, false, '?debug=1'); const ws = h.sockets[0]!; created(ws);
+  ws.message({ type: 'state', connected: [true, true] }); ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
+  h.frame(33); h.frame(34);
   for (const tick of h.intervals) tick();
   assert.equal(h.element('#diagnostics').hidden, false);
   assert.match(h.element('#relay-rtt').textContent, /RTT de aplicación.*muestras=.*última.*variación/);
@@ -256,7 +332,7 @@ test('remote Enter activates once without native click; repeats and synthesized 
   const press = h.key('keydown');
   assert.equal(h.sockets.length, 2, 'click-only TV entry does not activate Enter on its own');
   assert.equal(press.defaultPrevented, true); assert.equal(original.closed, 1);
-  assert.equal(h.textureCreations(), 9);
+  h.frame(); assert.equal(h.canvases.length, 2);
   h.key('keydown', 'Enter', { repeat: true }); h.key('keydown');
   for (const key of ['AudioVolumeUp', 'AudioVolumeDown', 'AudioVolumeMute', 'Unidentified']) {
     assert.equal(h.key('keydown', key).defaultPrevented, false);
@@ -268,7 +344,7 @@ test('remote Enter activates once without native click; repeats and synthesized 
   h.key('keydown'); h.key('keyup'); assert.equal(h.sockets.length, 3);
   h.element('#new-room').emit('click', { detail: 1 }); assert.equal(h.sockets.length, 4);
   assert.ok(h.sockets.slice(0, -1).every(ws => ws.closed === 1));
-  assert.equal(h.textureCreations(), 9, 'rooms must reuse cached scene art');
+  assert.equal(h.canvases.length, 2, 'rooms must reuse native cached art');
 });
 
 test('non-Enter keys and unrelated focus pass untouched; transient overlay blur does not end a room', () => {
@@ -303,27 +379,38 @@ test('legacy Enter on the canvas is owned; hidden and modified Enter are not con
   assert.equal(h.sockets.length, 3, 'normal keyboard button activation remains available');
 });
 
-test('paused TV frames still enforce the 60 second phone recovery deadline', () => {
+test('paused TV enforces the exact 60 second phone recovery deadline without frames', () => {
   const h = browser(bundle); const ws = h.sockets[0]!; created(ws);
   ws.message({ type: 'state', connected: [true, true] }); ws.message({ type: 'ready', slot: 1 }); ws.message({ type: 'ready', slot: 2 });
   h.frame(500); assert.equal(h.element('#clock').textContent, '02:00');
   ws.message({ type: 'state', connected: [false, true] });
-  h.frame(59999); assert.equal(h.document.body.dataset.phase, 'paused');
-  h.frame(1); assert.equal(h.document.body.dataset.phase, 'cancelled');
+  h.elapse(59999); assert.equal(h.document.body.dataset.phase, 'paused');
+  h.elapse(1); assert.equal(h.document.body.dataset.phase, 'cancelled');
   assert.match(h.element('#status').textContent, /CANCELADO.*sin ganador/);
   assert.equal(h.element('#clock').textContent, '02:00'); assert.equal(ws.closed, 0);
 });
 
-test('drawing is capped without forcing Canvas; idle HUD phase writes and hidden diagnostics stop', () => {
-  const h = browser(bundle); created(h.sockets[0]!);
-  assert.equal(h.config.type, 0); assert.equal(h.config.fps.limit, 30);
-  assert.equal(h.config.width, 1280); assert.equal(h.config.height, 720); assert.equal(h.config.scale.zoom, 1);
-  assert.equal(h.config.input.keyboard, false);
+test('idle keeps the existing public gameStatus heartbeat without drawing or reconnecting', () => {
+  const h = browser(bundle); const ws = h.sockets[0]!; created(ws); h.frame();
+  const draws = h.drawCalls.length;
+  h.elapse(1000); for (const tick of h.intervals) tick();
+  assert.deepEqual(ws.sent.map(message => message.type), ['createGame', 'gameStatus', 'ping', 'gameStatus']);
+  assert.equal(ws.sent[3].remainingMs, 120000); assert.equal(ws.sent[3].phase, 'lobby');
+  assert.equal(h.drawCalls.length, draws); assert.equal(h.pendingFrames(), 0); assert.equal(h.sockets.length, 1);
+});
+
+test('native drawing stops in idle; HUD phase writes and hidden diagnostics stop', () => {
+  const h = browser(bundle); created(h.sockets[0]!); h.frame();
+  assert.equal(h.canvases.length, 2);
+  assert.equal(h.canvases[0].width, 1280); assert.equal(h.canvases[0].height, 720);
+  assert.equal(h.pendingFrames(), 0);
+  const draws = h.drawCalls.length;
   const writes = h.phaseWrites();
   const hud = ['#clock', '#score-p1', '#score-p2', '#status', '#goal-banner'].map(id => h.element(id));
   const textWrites = hud.map(element => element.textWrites);
   for (let i = 0; i < 10; i++) h.frame(10);
   assert.equal(h.phaseWrites(), writes);
+  assert.equal(h.drawCalls.length, draws); assert.equal(h.pendingFrames(), 0);
   assert.deepEqual(hud.map(element => element.textWrites), textWrites);
   assertScore(h, 0, 0);
   for (const tick of h.intervals) tick();
@@ -358,7 +445,7 @@ for (const slot of [1, 2] as const) test(`actual goal at P${slot}'s target annou
   assert.equal(banner.hidden, true); assert.equal(banner.textContent, '');
   assert.equal(h.element('#clock').textContent, '01:59');
   assert.equal(h.intervals.length, 1, 'no extra polling timer for the banner');
-  assert.equal(h.textureCreations(), 9); assert.equal(h.canvas(), '');
+  assert.equal(h.canvases.length, 2); assert.equal(h.canvas(), '');
   h.frame(118789); assert.equal(h.document.body.dataset.phase, 'playing');
   h.frame(1); assert.equal(h.document.body.dataset.phase, 'finished');
   assert.equal(h.element('#clock').textContent, '00:00');
@@ -373,7 +460,8 @@ test('a score increase settled by disconnect still announces its credited player
   ws.message({ type: 'state', connected: [false, true] });
   assert.equal(h.document.body.dataset.phase, 'paused');
   assert.equal(h.element('#goal-banner').textContent, '¡GOOOLLL! P1 azul');
-  h.frame(1200); assert.equal(h.element('#goal-banner').hidden, true);
+  h.elapse(1199); assert.equal(h.element('#goal-banner').hidden, false);
+  h.elapse(1); assert.equal(h.element('#goal-banner').hidden, true);
   assert.equal(h.element('#clock').textContent, '02:00');
 });
 
@@ -427,6 +515,45 @@ test('readiness, networking and forged phone gameStatus never create an announce
   ws.message({ type: 'gameStatus', phase: 'playing', score: [99, 88], remainingMs: 120000 });
   assertScore(h, 0, 0); assert.equal(h.element('#goal-banner').hidden, true);
   assert.equal(h.document.body.dataset.phase, 'lobby'); assert.equal(ws.closed, 0);
+});
+
+test('native entry and direct public host preserve the same full match, leases, pause, resume and rematch', () => {
+  const h = browser(goalBundles[0]!); const ws = h.sockets[0]!;
+  let now = 0;
+  const expectedMessages: unknown[] = [];
+  const direct = new FootballHost(message => expectedMessages.push(message), () => now, {
+    initialState: { ball: { x: 1240, y: 580, vx: 800 } },
+  });
+  const generation = direct.newRoom(); ws.open();
+  const check = () => {
+    assert.equal(JSON.stringify(h.snapshot()), JSON.stringify(direct.snapshot()));
+    assert.equal(JSON.stringify(ws.sent.filter(message => message.type !== 'createGame')), JSON.stringify(expectedMessages));
+  };
+  const receive = (message: object) => { ws.message(message); direct.receive(JSON.stringify(message), generation); check(); };
+  const advance = (ms: number, frame: boolean) => {
+    now += ms;
+    if (frame) h.frame(ms); else h.elapse(ms);
+    direct.update(0); check();
+  };
+  receive({ type: 'created', code: 'ABCD2345' });
+  receive({ type: 'state', connected: [true, true] });
+  receive({ type: 'ready', slot: 1 }); receive({ type: 'ready', slot: 2 });
+  advance(34, true); assertScore(h, 1, 0);
+  receive({ type: 'input', slot: 1, sequence: 1, buttons: { left: false, right: true, jump: true, kick: true } });
+  advance(34, true); advance(350, true);
+  assert.deepEqual(h.snapshot().players[0].buttons, { left: false, right: false, jump: false, kick: false });
+  now += 500; h.elapse(500); receive({ type: 'state', connected: [false, true] });
+  advance(1200, false); assert.equal(h.element('#goal-banner').hidden, true);
+  receive({ type: 'state', connected: [true, true] });
+  receive({ type: 'ready', slot: 1 }); receive({ type: 'ready', slot: 2 });
+  advance(34, true); advance(direct.snapshot().remainingMs, false);
+  assert.equal(h.snapshot().phase, 'finished'); assert.equal(h.snapshot().winner, 1);
+  receive({ type: 'ready', slot: 1 }); receive({ type: 'ready', slot: 2 });
+  assertScore(h, 0, 0); assert.equal(h.snapshot().remainingMs, 120000);
+  receive({ type: 'state', connected: [true, false] });
+  now += 59999; h.elapse(59999); check(); // No idle host update without a frame, event or heartbeat.
+  advance(1, false);
+  assert.equal(h.snapshot().phase, 'cancelled'); assert.equal(h.snapshot().winner, null);
 });
 
 test('TV unknown error and ended strings never leak; malformed input cannot publish game state', () => {
