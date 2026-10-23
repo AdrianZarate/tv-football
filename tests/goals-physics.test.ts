@@ -41,15 +41,44 @@ test('useful jump clears 165 pixels while preserving a single grounded press', (
   assert.equal(match.snapshot().players[0].vy, 0);
 });
 
-for (const surface of ['floor', 'wall'] as const) test(`moderate ${surface} bounce returns about 55 percent without gaining energy`, () => {
+for (const surface of ['floor', 'wall'] as const) test(`lively ${surface} bounce returns 92 percent without gaining energy`, () => {
   const match = start({ initialState: { ball: surface === 'floor'
     ? { x: 640, y: FIELD.floor - BALL.radius - 1, vy: 600 }
     : { x: FIELD.right - BALL.radius - 1, y: 350, vx: 600 } } });
   match.step(1 / 120, 1000 / 120);
   const ball = match.snapshot().ball;
   const speed = surface === 'floor' ? -ball.vy : -ball.vx;
-  assert.ok(speed >= 320 && speed <= 345, `rebound speed=${speed}`);
-  assert.deepEqual(match.snapshot().score, [0, 0]);
+  near(speed, (surface === 'floor' ? 600 + 1700 / 120 : 600) * 0.92);
+  const state = match.snapshot();
+  assert.deepEqual(state.score, [0, 0]); assert.equal(state.phase, 'playing');
+  near(state.remainingMs, 120000 - 1000 / 120);
+  assert.equal(state.winner, null); assert.equal(state.disconnectDeadlineMs, null);
+  assert.deepEqual(state.players.map(player => player.buttons), [neutralButtons(), neutralButtons()]);
+  assert.ok(Math.hypot(state.ball.vx, state.ball.vy) <= BALL.maxSpeed);
+});
+
+test('floor rebound remains visibly high for successive bounces with bounded energy', () => {
+  const match = start({ initialState: { ball: { x: 640, y: 621, vy: 600 } } });
+  const heights: number[] = [];
+  let apex = 622;
+  let previousVy = 600;
+  for (let frame = 0; frame < 300; frame++) {
+    match.step(1 / 120, (frame + 1) * 1000 / 120);
+    const state = match.snapshot();
+    apex = Math.min(apex, state.ball.y);
+    if (previousVy > 0 && state.ball.vy < 0) {
+      if (frame > 0) heights.push(622 - apex);
+      apex = 622;
+    }
+    previousVy = state.ball.vy;
+    assert.ok(Math.hypot(state.ball.vx, state.ball.vy) <= BALL.maxSpeed);
+    assert.deepEqual(state.score, [0, 0]); assert.equal(state.phase, 'playing');
+    near(state.remainingMs, 120000 - (frame + 1) * 1000 / 120);
+    assert.deepEqual(state.players.map(player => player.buttons), [neutralButtons(), neutralButtons()]);
+  }
+  assert.ok(heights.length >= 3);
+  assert.ok(heights[0]! > 85 && heights[1]! > 65 && heights[2]! > 50, JSON.stringify(heights));
+  for (let n = 1; n < heights.length; n++) assert.ok(heights[n]! < heights[n - 1]!, 'no gained rebound energy');
 });
 
 test('ground roll uses elapsed time, not frame count, and settles without drifting', () => {

@@ -5,7 +5,7 @@ export const FIELD = Object.freeze({
   width: 1280, height: 720, left: 64, right: 1216, top: 96, floor: 640, goalTop: 470,
 });
 export const PLAYER = Object.freeze({ halfWidth: 26, height: 100, speed: 420, jumpSpeed: 780 });
-export const BALL = Object.freeze({ radius: 18, restitution: 0.55, maxSpeed: 1400 });
+export const BALL = Object.freeze({ radius: 18, restitution: 0.92, maxSpeed: 1400 });
 export const MATCH_MS = 120000;
 export const DISCONNECT_MS = 60000;
 export const PHYSICS = Object.freeze({
@@ -42,6 +42,34 @@ type Control = { buttons: Buttons; lastInputMs: number; jump: boolean; kick: boo
 const freshControl = (): Control => ({ buttons: neutralButtons(), lastInputMs: -Infinity, jump: false, kick: false });
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const validSlot = (slot: Slot) => slot === 1 || slot === 2;
+type Point = { x: number; y: number };
+type ContactPlane = Point & { offset: number; player?: PlayerSnapshot };
+const CONTACT_EPSILON = 1e-8;
+
+/** Nearest point in a 2D convex intersection: interior, faces, then vertices (no iteration). */
+function projectContacts(target: Point, planes: ContactPlane[]): Point | null {
+  let best: Point | null = null;
+  let distance = Infinity;
+  const consider = (point: Point) => {
+    if (!planes.every(plane => plane.x * point.x + plane.y * point.y >= plane.offset - CONTACT_EPSILON)) return;
+    const squared = (point.x - target.x) ** 2 + (point.y - target.y) ** 2;
+    if (squared < distance) { best = point; distance = squared; }
+  };
+  consider(target);
+  if (best) return best;
+  for (const [index, a] of planes.entries()) {
+    const depth = a.offset - a.x * target.x - a.y * target.y;
+    consider({ x: target.x + a.x * depth, y: target.y + a.y * depth });
+    for (let j = index + 1; j < planes.length; j++) {
+      const b = planes[j]!;
+      const determinant = a.x * b.y - a.y * b.x;
+      if (Math.abs(determinant) < CONTACT_EPSILON) continue;
+      consider({ x: (a.offset * b.y - a.y * b.offset) / determinant,
+        y: (a.x * b.offset - a.offset * b.x) / determinant });
+    }
+  }
+  return best;
+}
 
 /** Pure, TV-owned simulation. No wall clock, renderer, transport, randomness or timers. */
 export class FootballMatch {
@@ -193,6 +221,8 @@ export class FootballMatch {
 
   /** Returns true when a goal ended the current physics frame. */
   private simulate(delta: number): boolean {
+    const previousPlayers = this.players.map(player => ({ ...player }));
+    const previousBall = { ...this.ball };
     for (const [index, player] of this.players.entries()) {
       const control = this.controls[index]!;
       player.kickCooldownMs = Math.max(0, player.kickCooldownMs - delta * 1000);
@@ -235,8 +265,7 @@ export class FootballMatch {
     } else this.ball.x += this.ball.vx * delta;
     this.ball.y += this.ball.vy * delta;
     this.boundBallVertically();
-    for (const player of this.players) this.collideBallPlayer(player);
-    this.boundBallVertically();
+    this.resolveBallContacts(previousBall, previousPlayers, delta);
     this.limitBallSpeed();
     const inMouth = this.ball.y - BALL.radius >= FIELD.goalTop && this.ball.y + BALL.radius <= FIELD.floor;
     if (inMouth) {
@@ -314,37 +343,106 @@ export class FootballMatch {
     }
   }
 
-  private collideBallPlayer(player: PlayerSnapshot): void {
-    const closestX = clamp(this.ball.x, player.x - PLAYER.halfWidth, player.x + PLAYER.halfWidth);
-    const closestY = clamp(this.ball.y, player.y - PLAYER.height, player.y);
-    const dx = this.ball.x - closestX;
-    const dy = this.ball.y - closestY;
-    const distance = Math.hypot(dx, dy);
-    if (distance >= BALL.radius) return;
-    let nx: number;
-    let ny: number;
-    let push: number;
-    if (distance > 0) {
-      nx = dx / distance;
-      ny = dy / distance;
-      push = BALL.radius - distance;
-    } else {
-      // Fixture overlap or a squeezed ball: escape through the nearest rectangle face.
+  private resolveBallContacts(previousBall: Body, previousPlayers: PlayerSnapshot[], delta: number): void {
+    const proposed = this.players.map(player => ({ ...player }));
+    // Keep the ball on its incoming side of each candidate body. Recompute the
+    // tangent as feet pass a corner, so an obsolete diagonal cannot block landing.
+    const normalAt = (player: PlayerSnapshot): Point => {
+      const dx = previousBall.x - clamp(previousBall.x, player.x - PLAYER.halfWidth, player.x + PLAYER.halfWidth);
+      const dy = previousBall.y - clamp(previousBall.y, player.y - PLAYER.height, player.y);
+      const distance = Math.hypot(dx, dy);
+      if (distance > CONTACT_EPSILON) return { x: dx / distance, y: dy / distance };
+      // Trusted overlapping fixtures: never select a face whose escape is outside the field.
       const faces = [
-        { depth: this.ball.x - (player.x - PLAYER.halfWidth), x: -1, y: 0 },
-        { depth: player.x + PLAYER.halfWidth - this.ball.x, x: 1, y: 0 },
-        { depth: this.ball.y - (player.y - PLAYER.height), x: 0, y: -1 },
-        { depth: player.y - this.ball.y, x: 0, y: 1 },
+        { x: -1, y: 0, depth: previousBall.x - player.x + PLAYER.halfWidth },
+        { x: 1, y: 0, depth: player.x + PLAYER.halfWidth - previousBall.x },
+        { x: 0, y: -1, depth: previousBall.y - player.y + PLAYER.height },
+        { x: 0, y: 1, depth: player.y - previousBall.y },
+      ].filter(face => face.y !== 1 || player.y + BALL.radius <= FIELD.floor - BALL.radius);
+      return faces.reduce((nearest, face) => face.depth < nearest.depth ? face : nearest);
+    };
+    const target = { x: this.ball.x, y: this.ball.y };
+    const maxTravel = BALL.maxSpeed * delta + Math.max(...proposed.map((player, index) =>
+      Math.hypot(player.x - previousPlayers[index]!.x, player.y - previousPlayers[index]!.y)));
+    const planesAt = (fractionX: number, fractionY: number): ContactPlane[] => {
+      const planes: ContactPlane[] = [
+        { x: 0, y: 1, offset: FIELD.top + BALL.radius },
+        { x: 0, y: -1, offset: -(FIELD.floor - BALL.radius) },
       ];
-      const face = faces.reduce((nearest, item) => item.depth < nearest.depth ? item : nearest);
-      nx = face.x; ny = face.y; push = BALL.radius + face.depth;
+      if (target.y - BALL.radius < FIELD.goalTop) planes.push(
+        { x: 1, y: 0, offset: FIELD.left + BALL.radius },
+        { x: -1, y: 0, offset: -(FIELD.right - BALL.radius) },
+      );
+      this.players.forEach((player, index) => {
+        const before = previousPlayers[index]!;
+        const after = proposed[index]!;
+        player.x = before.x + (after.x - before.x) * fractionX;
+        player.y = before.y + (after.y - before.y) * fractionY;
+        const normal = normalAt(player);
+        planes.push({ ...normal, player, offset: normal.x * player.x + normal.y * (player.y - PLAYER.height / 2)
+          + Math.abs(normal.x) * PLAYER.halfWidth + Math.abs(normal.y) * PLAYER.height / 2 + BALL.radius });
+      });
+      return planes;
+    };
+    const solve = (planes: ContactPlane[]) => {
+      let point = projectContacts(target, planes);
+      // A head/corner can lift a mouth-bound trajectory above the bar. Close the
+      // walls in the same solve, not in a later clamp that invalidates the body contact.
+      if (point && point.y - BALL.radius < FIELD.goalTop && planes.length === 4) {
+        planes.push({ x: 1, y: 0, offset: FIELD.left + BALL.radius },
+          { x: -1, y: 0, offset: -(FIELD.right - BALL.radius) });
+        point = projectContacts(target, planes);
+      }
+      if (!point || Math.hypot(point.x - previousBall.x, point.y - previousBall.y) > maxTravel + CONTACT_EPSILON) return null;
+      const [a, b] = this.players;
+      if (Math.abs(a.x - b.x) < PLAYER.halfWidth * 2 - CONTACT_EPSILON &&
+        Math.min(a.y, b.y) - Math.max(a.y - PLAYER.height, b.y - PLAYER.height) > CONTACT_EPSILON) return null;
+      return point;
+    };
+    let planes = planesAt(1, 1);
+    let point = solve(planes);
+    if (!point) {
+      // Preserve an unconstrained axis: a blocked run must not consume a valid
+      // jump. Try full vertical escape first, then full horizontal movement.
+      // Only a squeeze blocking both axes uses the common-fraction fallback.
+      let blockX = true; let blockY = true;
+      if (solve(planesAt(0, 1))) blockY = false;
+      else if (solve(planesAt(1, 0))) blockX = false;
+      let low = 0; let high = 1;
+      for (let iteration = 0; iteration < 12; iteration++) {
+        const middle = (low + high) / 2;
+        if (solve(planesAt(blockX ? middle : 1, blockY ? middle : 1))) low = middle; else high = middle;
+      }
+      planes = planesAt(blockX ? low : 1, blockY ? low : 1);
+      point = solve(planes);
+      this.players.forEach((player, index) => {
+        if (blockX && proposed[index]!.x !== previousPlayers[index]!.x) player.vx = 0;
+        if (blockY && proposed[index]!.y !== previousPlayers[index]!.y) {
+          player.vy = 0;
+          player.grounded = player.y === FIELD.floor;
+        }
+      });
     }
-    this.ball.x += nx * push;
-    this.ball.y += ny * push;
-    const closingSpeed = (this.ball.vx - player.vx) * nx + (this.ball.vy - player.vy) * ny;
-    if (closingSpeed < 0) {
-      this.ball.vx -= (1 + BALL.restitution) * closingSpeed * nx;
-      this.ball.vy -= (1 + BALL.restitution) * closingSpeed * ny;
+    if (!point) return; // Malformed, already intersecting fixtures have no valid local solution.
+    this.ball.x = point.x; this.ball.y = point.y;
+    const active = planes.filter(plane => plane.x * point.x + plane.y * point.y - plane.offset < CONTACT_EPSILON * 10);
+    const velocity = { x: this.ball.vx, y: this.ball.vy };
+    const velocityPlanes = (bounce: boolean): ContactPlane[] => active.map(plane => {
+      const speed = plane.player ? plane.x * plane.player.vx + plane.y * plane.player.vy : 0;
+      const closing = plane.x * velocity.x + plane.y * velocity.y - speed;
+      return { x: plane.x, y: plane.y, offset: speed - (bounce ? BALL.restitution * Math.min(0, closing) : 0) };
+    });
+    // Restitution is applied once, simultaneously. Incompatible rebound targets
+    // become inelastic carrying contacts; incompatible carriers stop at the block.
+    let resolved = projectContacts(velocity, velocityPlanes(true)) ?? projectContacts(velocity, velocityPlanes(false));
+    if (!resolved) {
+      for (const plane of active) if (plane.player) {
+        const normalSpeed = plane.x * plane.player.vx + plane.y * plane.player.vy;
+        plane.player.vx -= plane.x * normalSpeed;
+        plane.player.vy -= plane.y * normalSpeed;
+      }
+      resolved = projectContacts(velocity, velocityPlanes(false));
     }
+    if (resolved) { this.ball.vx = resolved.x; this.ball.vy = resolved.y; }
   }
 }

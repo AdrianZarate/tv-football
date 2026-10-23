@@ -23,12 +23,20 @@ Los valores usan píxeles lógicos y segundos, no dependen de la resolución del
 |---|---|
 | Movimiento | 420 px/s (antes 300); 210 px en medio segundo, con parada inmediata al soltar. |
 | Salto | Impulso de 780 px/s (antes 650), gravedad de 1700 px/s² sin cambios; altura aproximada de 176 px y vuelo de 0,92 s. Permite alcanzar mejor pelotas elevadas, sin doble salto ni repetición automática. |
-| Rebote | Restitución de 0,55 (antes 0,76) en superficies y jugadores; menor rebote evita trayectorias excesivas. Un contacto ya separado no vuelve a aplicar restitución. |
+| Rebote | Restitución de 0,92 (antes 0,55) en superficies y jugadores: rebotes mucho más altos y duraderos, sin ganar energía contra una superficie quieta. Un contacto ya separado no vuelve a aplicar restitución. |
 | Rodadura | Arrastre exponencial de 1,8 s⁻¹ integrado por tiempo, no por cantidad de cuadros/contactos. Una pelota libre a 300 px/s conserva unos 49,59 px/s tras un segundo y avanza unos 139,12 px. Bajo 2 px/s se detiene; rebotes verticales menores de 35 px/s se asientan. |
 | Patada | Velocidad horizontal fija de 900 px/s, impulso vertical de 400 px/s (antes 480), alcance de 100 px y espera de 400 ms sin cambios. Sustituye la velocidad entrante para un arco consistente y más bajo en ambas direcciones. |
 | Seguridad | Velocidad total de pelota limitada a 1400 px/s antes de integrar y después de contactos; física en subpasos de hasta 1/120 s y límite de 100 ms por cuadro, sin recortar el reloj. |
 
-Se priorizan precisión, rodadura predecible y rebotes moderados; no se agregan ajustes ni poderes. Que resulte **divertido necesita comentarios de usuarios reales**: una prueba unitaria demuestra resultados deterministas, no diversión ni respuesta física del dispositivo.
+Se priorizan rebotes vivos, rodadura predecible y contactos estables; no se agregan ajustes ni poderes. Que resulte **divertido necesita comentarios de usuarios reales**: una prueba unitaria demuestra resultados deterministas, no diversión ni respuesta física del dispositivo.
+
+### Pelota entre dos jugadores
+
+Los contactos se resuelven juntos con suelo, techo y límites laterales cerrados: corregir contra un jugador no puede volver a meter la pelota en el otro ni debajo del suelo. Cada cuerpo aporta un plano tangente del lado por el que llegó la pelota, recalculado para la posición candidata del cuerpo. Así, al pasar de una esquina a un lateral durante el aterrizaje, una diagonal antigua no bloquea el descenso. En las esquinas esa aproximación es conservadora; debajo de un jugador suficientemente elevado sigue habiendo paso real.
+
+Si los jugadores intentan cerrar un hueco que ya no admite la pelota, se frena el avance: puede quedar bloqueada o acompañar un contacto, pero no atraviesa cuerpos ni sale disparada arbitrariamente por encima de ellos. El bloqueo distingue los ejes: primero intenta conservar todo el movimiento vertical reduciendo solo el horizontal; si no es posible, prueba conservar el horizontal reduciendo el vertical. Solo si ambos intentos fallan reduce ambos juntos. Así, correr contra una pelota bloqueada no cancela un salto válido, tampoco después de mantener la presión. No se vuelve a insertar el impulso ni el evento de salto: mantener Saltar sigue sin repetirlo al aterrizar.
+
+Se busca la fracción segura con doce bisecciones como máximo, más hasta dos comprobaciones de ejes. Cada proyección evalúa hasta seis planos y sus intersecciones (hasta 22 candidatos), sin bucles hasta converger. El desplazamiento local no supera el recorrido máximo de pelota más el movimiento de jugador del subpaso. La restitución se aplica una sola vez y simultáneamente; si dos rebotes son incompatibles, se usa contacto sin rebote y, si hace falta, se retira solo la velocidad normal al contacto, conservando la tangencial. Se conserva el límite vectorial de 1400 px/s y la patada cercana con sus reglas de impulso, espera y nueva pulsación.
 
 ## Marcador y anuncio de gol en TV
 
@@ -84,7 +92,9 @@ El texto usa Arial / sans-serif disponible localmente mediante el lienzo de Phas
 
 ## Verificación y pruebas reales
 
-Modelo, goles, TV y renderizado: `node --import tsx --test tests/goals-physics.test.ts tests/game.test.ts tests/tv-game.test.ts tests/tv-ui.test.ts tests/render.test.ts`. TypeScript: `npm run typecheck`.
+Modelo, contactos, goles y TV: `node --import tsx --test tests/ball-contacts.test.ts tests/goals-physics.test.ts tests/game.test.ts tests/tv-game.test.ts tests/tv-ui.test.ts`. Renderizado: `node --import tsx --test tests/render.test.ts`. TypeScript: `npm run typecheck`.
+
+Las regresiones públicas cubren un corredor contra un rival quieto, ambos presionando, espejos y orden de jugadores, presión sostenida y liberación, cuerpo/cabeza/esquina junto al suelo y paso bajo un jugador elevado. También comprueban correr + Saltar inmediatamente o tras doce subpasos de presión, P1/P2 en ambos sentidos, el vuelo normal completo sin salto automático al aterrizar y Patear bajo bloqueo con espera y nueva pulsación. Verifican separación en cada subpaso observable, velocidad acotada y ausencia de goles o cambios de reloj/controles inesperados; no sustituyen la prueba física.
 
 En la app instalada con dos teléfonos reales:
 
