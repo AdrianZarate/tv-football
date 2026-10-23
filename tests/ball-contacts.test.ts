@@ -208,5 +208,5 @@ test('a ball still rolls underneath a sufficiently airborne player without a fal
   }
   assert.ok(match.snapshot().ball.x > 626);
   assert.equal(PLAYER.speed, 420); assert.equal(PLAYER.jumpSpeed, 780);
-  assert.equal(PHYSICS.kickSpeed, 900); assert.equal(PHYSICS.kickLift, 400);
+  assert.equal(PHYSICS.kickSpeed, 900); assert.equal(PHYSICS.kickLift, 650);
 });

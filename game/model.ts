@@ -10,7 +10,7 @@ export const MATCH_MS = 120000;
 export const DISCONNECT_MS = 60000;
 export const PHYSICS = Object.freeze({
   gravity: 1700, maxFrameSeconds: 0.1, substepSeconds: 1 / 120,
-  kickRange: 100, kickSpeed: 900, kickLift: 400, kickCooldownMs: 400,
+  kickRange: 100, kickSpeed: 900, kickLift: 650, kickCooldownMs: 400,
   rollingDrag: 1.8, rollStopSpeed: 2, bounceStopSpeed: 35,
 });
 
