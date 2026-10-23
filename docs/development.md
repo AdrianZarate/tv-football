@@ -58,21 +58,30 @@ La TV instalada no puede usar localhost de esta computadora. Probá su comportam
 ## Compilación y empaquetado
 
 - `npm run build` agrupa controles y TV en IIFE legibles con esbuild para Chrome 70/Safari 13. Ese objetivo de transformación no demuestra qué motor tiene la TV; no se incluyen adaptadores de API en ejecución.
-- Scripts, estilos, Phaser y generación QR son locales, no de CDN. No se generan mapas de código fuente. El HTML de controles se copia sin cambios; los encabezados HTTP del servidor aportan su CSP.
-- Los recursos de TV usan rutas relativas. Su CSP generada permite solo el `/ws` configurado, scripts/estilos locales e imágenes locales/data para el QR. No se usa `unsafe-eval` ni `unsafe-inline`: el gestor de escala de Phaser asigna propiedades de estilo individuales, no bloques en línea.
+- Scripts, estilos y generación QR son locales, no de CDN. La entrada de TV 0.2.5 usa Canvas2D nativo y no importa Phaser ni `game/scene.ts`; la dependencia y escena histórica permanecen para compatibilidad y sus pruebas, sin cambios de manifiestos. No se generan mapas de código fuente. El HTML de controles se copia sin cambios; los encabezados HTTP del servidor aportan su CSP.
+- Los recursos de TV usan rutas relativas. Su CSP generada permite solo el `/ws` configurado, scripts/estilos locales e imágenes locales/data para el QR. No se usa `unsafe-eval` ni `unsafe-inline`; el ajuste de cancha usa CSS `object-fit: contain`.
 - `PUBLIC_ORIGIN` queda compilado en la TV y su CSP. Cambiarlo requiere volver a compilar, empaquetar e instalar la app; cambiar solo variables del servidor no alcanza.
 - `npm run package:tv` requiere `dist/tv` y una CLI webOS instalada explícitamente. Consultá [webOS](webos.md). Nunca descarga ni instala herramientas automáticamente.
-- Los metadatos generados tienen versión `0.2.4`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente.
+- Los metadatos generados tienen versión `0.2.5`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente. La generación real de producción/IPK 0.2.5 sigue pendiente; las compilaciones temporales de los tests no son una entrega.
 - Las pruebas de compilación ejecutan los scripts públicos en directorios temporales nuevos del sistema y los quitan al terminar. `node --import tsx --test tests/build.test.ts` comprueba compilación/empaquetado.
-- `node --import tsx --test tests/tv-game.test.ts` comprueba el adaptador público con tiempo virtual y conexiones reales locales de servidor/teléfonos. No ejecuta Phaser en un navegador ni demuestra compatibilidad de TV. El adaptador avanza antes de dibujar; física, marcador y tiempo siguen bajo autoridad de la TV.
+- `node --import tsx --test tests/tv-game.test.ts` comprueba el adaptador público con tiempo virtual y conexiones reales locales de servidor/teléfonos. No ejecuta el Canvas2D real de un navegador ni demuestra compatibilidad de TV. El adaptador avanza antes de dibujar; física, marcador y tiempo siguen bajo autoridad de la TV.
 - `node --import tsx --test tests/tv-ui.test.ts tests/localization.test.ts` ejecuta las entradas reales con plataformas simuladas y comprueba arranque oculto, límites de visibilidad, aislamiento de eventos antiguos y texto español. No reemplaza la prueba física.
 
-## Comprobar los cambios de 0.2.4
+## Comprobar la recuperación ligera 0.2.5
+
+La prueba física de 0.2.4 falló al arrancar, antes del QR, con demora de volumen y apagado. Fuera del juego la respuesta volvió a ser normal. No se confirmó la causa; reducir carga de software no demuestra resolver el problema del sistema.
+
+- Arranque y dibujo: el socket se crea antes del primer dibujo visible; una página inicialmente oculta no crea lienzos. Fondo simple cacheado una vez, un lienzo visible y otro de fondo de 1280×720, sin escala DPR, fuentes, audio, WebGL ni decoración animada. Hasta 30 actualizaciones activas por segundo, sin cadena continua en sala, pausa ni fin; el heartbeat conserva estados y los límites temporales usan un timeout acotado. Un error gráfico se muestra sin reintentos automáticos.
+- Evidencia de fuente, no entrega: esbuild en memoria `write:false`, sin minificar y con idénticos destinos, comparó ff34506 con T1: 7.083.297 → 113.326 bytes, 36 entradas actuales sin Phaser/escena histórica. No son bytes de un IPK ni medidas de CPU/GPU o FPS. Ver [presupuesto y preservación](tv-performance.md).
+- Reglas conservadas: ambos confirman inicio, revancha y reanudación; 120 segundos activos, recuperación de la misma sesión antes de 60 segundos y cancelación sin ganador al vencer. Se mantiene el anuncio de 1,2 segundos acreditado al jugador correcto, sin parar el reloj.
+- Comprobación local de navegador: el helper preparado en `artifacts/lightweight-recovery-0.2.5/browser-check.mjs` está pendiente de ejecución por el padre contra su preview loopback en `http://localhost:3300/tv/`. Solo comprueba arranque, DOM, ajuste y muestras pequeñas del Canvas2D real; no captura imágenes ni mide rendimiento o aceptación física. El JSON de resultados solo existirá tras esa ejecución.
+
+### Conservar los cambios jugables de 0.2.4
 
 - Mandos: grupos de movimiento/acciones para ambos pulgares, diseño adaptable y fondo estático coherente con el estadio. Revisá 320 píxeles de ancho en vertical, horizontal de poca altura y escritorio; barras, teclado, zonas seguras, ayuda y varios dedos. Conservá zoom y navegación por teclado. El diseño no demuestra comodidad ni ausencia de desplazamiento en teléfonos reales.
 - Física: rebotes mucho mayores con restitución 0,92 (antes 0,55), sin cambiar las acciones disponibles. Probá la pelota apretada entre jugadores en ambas direcciones, al empujar ambos y al soltar; no debe atravesar cuerpos, pero sí pasar bajo un jugador si el salto deja espacio. Verificá cruce de pelota completa, ambos arcos, gol en contra y anuncio sin bloquear el reloj.
-- Fondos: estadio más elaborado dibujado una vez en la textura existente y mando con decoración estática. Revisá contraste de pelota/jugadores/arcos y avisos; no deduzcas FPS de TV ni diversión de los tests. Volumen y OK/Nueva sala deben conservar su respuesta.
+- Contraste: la TV ahora usa cancha simple en lugar del estadio elaborado; el mando conserva su decoración estática. Revisá pelota/jugadores/arcos y avisos sin recorte; no deduzcas FPS de TV ni diversión de los tests. Volumen, apagado y OK/Nueva sala deben volver a comprobarse en la TV real.
 
-La evidencia de navegador de 0.2.3 es histórica, no prueba del código 0.2.4. Las comprobaciones de navegador y las pruebas físicas nuevas siguen siendo necesarias; usá la [lista de dispositivos](device-checklist.md#comprobar-los-cambios-024).
+La evidencia de navegador de 0.2.3/0.2.4 es histórica, no prueba del renderizador 0.2.5. Las comprobaciones nuevas de navegador y las pruebas físicas siguen pendientes; usá la [lista de recuperación](device-checklist.md#recuperación-ligera-025-pendiente). No se autorizan aquí publicación, instalación ni reintentos por inspector/SSH.
 
 Consultá el [protocolo](protocol.md) para caducidad de controles, lugares reservados y mensajes acotados. La prueba anterior de conectividad se validó en dispositivos; este juego completo todavía no tiene aceptación física. El siguiente paso es la [lista de dispositivos](device-checklist.md), incluido dibujo/CSP, foco del control remoto y recuperación.

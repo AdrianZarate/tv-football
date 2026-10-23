@@ -2,13 +2,36 @@
 
 Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados. Recogé evidencia de LG real + Android + iPhone. La prueba anterior de conectividad se validó y tuvo buena respuesta; el juego completo sigue pendiente de aceptación física. Navegadores de escritorio, pruebas sin pantalla, emuladores y compilaciones exitosas no demuestran compatibilidad de TV ni latencia aceptable. Consultá las [reglas](game.md).
 
+## Recuperación ligera 0.2.5: pendiente
+
+**T4 bloqueada: falta autorización separada de entrega/instalación y prueba del operador. Esta lista no se ha ejecutado para 0.2.5.** La prueba física de 0.2.4 falló desde el arranque, antes del QR: volumen lento y apagado demorado; el usuario informó respuesta normal fuera del juego. No hay aceptación física de 0.2.4 ni causa confirmada. No se repiten la sesión agotada de inspector/SSH ni la captura fallida anterior.
+
+La entrada de TV 0.2.5 elimina Phaser de su grafo y usa Canvas2D nativo: fondo simple cacheado una vez, lienzos de 1280×720 sin multiplicador DPR, hasta 30 actualizaciones activas por segundo y sin cadena continua de dibujo en sala, pausa o fin. Conserva heartbeat, reglas, física y mandos de 0.2.4. Es reducción local de trabajo de software, no prueba de CPU/GPU ni de recuperación del sistema.
+
+### Evidencia local 0.2.5 completada, no aceptación física
+
+- Padre job11: build, paquete TV 0.2.5, preview loopback y Docker local `tv-football-lightweight-025:local` con `--network none`, salida 0; salud HTTP 200 con cuerpo exacto `{"ok":true}`. JavaScript entregado **113.340 bytes**, IPK **21.852 bytes**, ID `com.systemautomatic.tvfootball.probe` sin cambios. La comparación de fuentes `write:false` **7.083.297→113.326 bytes** (~98,4% menos) es una medición distinta. Avisos requiredACG/DEP0190 conocidos conservados.
+- Verificador independiente: enfoque 110/110, salida 0, stderr vacío y ningún bloqueo de software reproducido para S1–S3. Tipos salió 1 por entorno (`tsc` ausente al omitir `.bin` de Windows en el scratch), sin diagnósticos TypeScript ni reintento. Suite raíz 184/184 y tipos raíz salida 0 siguen vigentes para las mismas fuentes protegidas. Una sonda inicialmente demasiado estricta sobre el último RAF sucio se corrigió en scratch y pasó dirigida 1/1; no hubo defecto ni corrección del producto. Ver [evidencia y límites](tv-performance.md).
+- Padre job13: una nueva comprobación funcional **local** 0.2.5, salida 0 tras aproximadamente un segundo. El JSON existente `artifacts/lightweight-recovery-0.2.5/browser-results.json` da `success: true`, espacio 7, viewport visible 1280×900/DPR1, sala y lobby/02:00/P1 azul: 0/P2 naranja: 0; el padre confirmó QR creado. Un Canvas2D nativo lógico 1280×720, error oculto, ajuste completo y 265 píxeles coincidentes en margen/cancha/P1/P2/pelota. Contenido centrado 912×513 dentro de caja 912×752. No hubo screenshot/exportación, mutación privada del anfitrión, TV, teléfonos ni flujo de juego. El helper finalizó una vez con SUCCESS y el padre detuvo su preview propio (job12).
+- Esa comprobación no repite la captura 0.2.4 ni el diagnóstico agotado de TV. No demuestra QR físico, volumen, apagado, FPS, latencia ni recuperación: siguen desconocidos y pendientes de T4, igual que el juego con dispositivos reales.
+- Evaluación del padre: riesgo medio + escalamiento independiente ítem 3, `reviewDue: false` bajo presupuesto de 16 rutas/632 líneas. Fuentes protegidas sin cambios; T1/T2 terminadas como código, T3 solo pendiente de commits/refs del padre, sin más comprobaciones completas necesarias. No hubo push, instalación ni cambios de VPS/TV: la autorización es preparar solamente.
+
+Solo después de autorización y entrega por el operador:
+
+- [ ] Registrar versión real instalada, revisión y entorno. Desde el inicio, comprobar que aparece la cancha completa, una sola sala, QR y dirección manual sin bloqueo; no conectar teléfonos antes de observar el arranque.
+- [ ] Comparar volumen/silenciar con la app cerrada, sala abierta y jugando; comprobar apagado con el operador y registrar demoras, sin atribuirlas a CPU/GPU ni repetir diagnósticos remotos.
+- [ ] Verificar cancha simple sin recorte, P1 azul/P2 naranja, pelota y ambos arcos, marcador y reloj 02:00 legibles. OK/Nueva sala cambia una sola sala por pulsación; otras teclas conservan su función.
+- [ ] Conectar ambos teléfonos por QR y también por código; comprobar mandos vertical/horizontal y acciones simultáneas. Ambos confirman inicio, revancha y reanudación. Repetir contactos, paso bajo salto, restitución 0,92, goles completos/en contra y anuncio acreditado de 1,2 segundos sin parar el reloj.
+- [ ] Desconectar y recuperar con la misma sesión antes de 60 segundos; ambos confirman. Comprobar cancelación sin ganador al vencer. Segundo plano/salida/pérdida de red de TV terminan la sala; volver requiere Nueva sala y no recuperación automática.
+- [ ] Revalidar las secciones de conexión, reglas y matriz táctil de abajo; revisar resultados con el usuario antes de afirmar recuperación o aceptación física.
+
 ## Inicio rápido
 
-1. Registrá el entorno; conectá los tres dispositivos a la misma Wi-Fi y usá el servidor público desplegado.
-2. Conectá ambos teléfonos, confirmá preparación, jugá partidos completos, ejercitá recuperación y ciclo de vida, y medí cada teléfono en reposo y con carga.
+1. Registrá el entorno; conectá los tres dispositivos a la misma Wi-Fi y usá el servidor público desplegado, solo tras autorización.
+2. Observá primero arranque/QR y respuesta del sistema. Luego conectá ambos teléfonos, confirmá preparación y ejercitá juego, recuperación y ciclo de vida.
 3. Revisá los resultados nuevos con el usuario. **No afirmes aceptación física del juego completo a partir de la prueba anterior.**
 
-## Comparar volumen, control remoto y distribución (0.2.2)
+## Referencia histórica: volumen, control remoto y distribución (0.2.2)
 
 - [ ] Con la app cerrada, probar una pulsación de subir/bajar volumen y silenciar. Registrar si la respuesta es inmediata o tarda.
 - [ ] Repetir con la sala abierta y durante una partida en la versión anterior y en 0.2.2, manteniendo las mismas condiciones. Anotar la versión y el resultado; un video corto puede ayudar. No atribuir la causa al servidor o a CPU/GPU solo por la percepción.
@@ -16,7 +39,7 @@ Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados
 - [ ] Solo marcador, reloj y estado esenciales en la vista principal; QR/dirección/código legibles cuando hacen falta. Diagnóstico técnico oculto salvo modo explícito `?debug=1`; no mide carga de CPU/GPU ni latencia del volumen. Ver [límites de la optimización](tv-performance.md).
 - [ ] En Android e iPhone, revisar grupos de movimiento y acciones, alcance de ambos pulgares y botones de al menos 64 píxeles lógicos, vertical y horizontal. Probar pulsaciones simultáneas, soltar y cancelar; los avisos de conexión/preparación no deben quedar ocultos. Ver [diseño de controles](controller-layout.md).
 
-## Comprobar el pulido 0.2.3
+## Referencia histórica: pulido 0.2.3
 
 Referencia histórica: conservá estos criterios y cualquier evidencia de navegador de 0.2.3 como resultados de esa versión, no como prueba del código 0.2.4. El rebote moderado de esta sección describe el ajuste anterior, no el objetivo nuevo.
 
@@ -30,9 +53,9 @@ Referencia histórica: conservá estos criterios y cualquier evidencia de navega
 
 ## Comprobar los cambios 0.2.4
 
-**Estado: T4 bloqueada por decisión humana sobre prueba visual no disponible; T5 bloqueada por publicación/instalación del operador y aceptación física pendientes.** El usuario debe elegir una sola vía: autorizar publicación 0.2.4 para inspección visual manual, o esperar reparación del navegador. Ninguna está seleccionada. La aprobación previa correspondía solo a 0.2.3; no autoriza publicar 0.2.4 ni ejecutar más verificaciones.
+**Registro histórico, no aceptación: la prueba física posterior de 0.2.4 falló al arrancar.** La decisión vigente es preparar localmente 0.2.5 lo más ligera posible, sin publicación, instalación ni reintentos de diagnóstico de TV. La alternativa anterior de publicar 0.2.4 para inspección ya no es el siguiente paso.
 
-Completá esta sección con la versión nueva solo tras despliegue e instalación autorizados. El código y las pruebas automáticas no prueban comodidad física, ausencia de desplazamiento en teléfonos reales, FPS de TV ni diversión.
+Los datos siguientes corresponden al candidato histórico 0.2.4 y no validan Canvas2D 0.2.5. Conservá los criterios jugables para revalidación autorizada, sustituyendo el estadio decorativo por la cancha simple. El código y las pruebas automáticas no prueban comodidad física, ausencia de desplazamiento en teléfonos reales, FPS de TV ni diversión.
 
 ### Evidencia existente, no aceptación física
 
@@ -40,14 +63,14 @@ Completá esta sección con la versión nueva solo tras despliegue e instalació
 - Padre: job 3 regeneró HTTPS de producción, IPK 0.2.4 con ID de app sin cambios y preview loopback; sustituye el job 2 obsoleto previo a la corrección. Docker local `tv-football-polish-024:local` con `--network none`: salud HTTP 200, cuerpo exacto `{"ok":true}`, salida 0. Avisos requiredACG/DEP0190 conocidos sin cambios. No hubo publicación ni instalación.
 - Rondas 01/02 del padre: salida 0. Lectura del `artifacts/browser-responsive-stadium-0.2.4/results.json` existente: `success: true`, espacio 6; ocho tamaños/alturas, ayuda abierta y tres fases de horizontal corto. Cuatro botones ≥64, dentro del área visible, hit-test verdadero, sin desbordamiento ni scroll de página, formulario oculto y controles antes de ayuda; marcador global P1 azul 7/P2 naranja 9. Dos toques CDP izquierda + salto llegaron por WebSocket real, se mantuvieron durante 650→600 visibles y se liberaron a neutro. Ver [etiquetas exactas y límites](controller-layout.md). Es Chromium emulado con VisualViewport sustituido, no barras/teclado/fingers físicos ni iPhone.
 - Ronda 03: única captura TV-first fallida, salida 1 tras unos 17 segundos por `CdpRequestTimeoutError` en `Page.captureScreenshot`, antes de intentar teléfono y sin alcanzar el límite exterior de 45 segundos. Solo se midió el lienzo Phaser real: lógico 1280 × 720, rectángulo 1072 × 603 en x28/y206, viewport 1440 × 900 DPR1, fase Lobby. Sin imagen ni veredicto visual 0.2.4, sin reintento ni alternativa. Espacio Ego 6 p1 teléfono/p2 TV conservado por el error; servidor loopback propio del padre (job 4) detenido.
-- Evaluación final del padre: riesgo medio + escalamiento ítem 3, `reviewDue: false`, sin revisión nativa iniciada. T1–T3 están terminadas como código, no como aceptación visual/física. Los commits locales serán del padre, con pruebas/docs completas por comportamiento: física (~423 líneas, sobre la recomendación de 400 para conservar todas las regresiones de salto), mando (~253), estadio cacheado (~253), metadatos/evidencia. Sin staging parcial de pruebas ni publicación automática.
+- Evaluación final del padre: riesgo medio + escalamiento ítem 3, `reviewDue: false`, sin revisión nativa iniciada. T1–T3 están terminadas como código, no como aceptación visual/física. Los commits locales serán del padre, con pruebas/docs completas por comportamiento: física (~423 líneas, sobre la recomendación de 400 para conservar todas las regresiones de salto), mando (~253), estadio cacheado (~253), metadatos/evidencia. Sin staging parcial de pruebas ni publicación automática. Este cierre histórico de código no implica aceptación física: la prueba posterior falló y motivó la recuperación 0.2.5.
 
 - [ ] En Android e iPhone, probar vertical de 320 píxeles lógicos de ancho, horizontal de poca altura y también navegador de escritorio. Registrar área visible y orientación: grupos para ambos pulgares, cuatro acciones y botones de al menos 64 píxeles lógicos; confirmar que todos sean alcanzables sin desplazar la página y anotar si resultan cómodos.
 - [ ] Repetir con barras del navegador expandidas/contraídas, teclado abierto/cerrado y zonas seguras (muescas/indicador de inicio). Ayuda/conexión deben poder desplazarse internamente sin tapar controles. Conservar ampliación y navegación por teclado; no exigir orientación fija.
 - [ ] Probar varios dedos: movimiento + salto + patada, liberación independiente, salida del botón y cancelación. Girar/redimensionar con botones pulsados; no deben quedar entradas pegadas ni cambiar lugar/credenciales. Cortar y restaurar Wi-Fi; recuperar con la misma sesión dentro del plazo y confirmar ambos, sin compartir claves. Repetir la matriz táctil completa de abajo.
 - [ ] Apretar la pelota entre los dos jugadores: corredor contra rival quieto, ambos empujando, mantener presión y soltar, repitiendo en ambas direcciones. No debe atravesar cuerpos ni salir disparada a una posición lejana. Saltar y confirmar que pase por debajo solo cuando haya espacio real.
 - [ ] Comparar los rebotes mucho mayores (restitución 0,92 frente a 0,55) en suelo, paredes y jugadores; registrar sensación y control sin darlos por aceptados. Confirmar pelota completa dentro del arco para puntuar, ausencia de gol sobre el travesaño, gol en contra acreditado al rival y un único punto por cruce. **¡GOOOLLL!** debe acreditar al jugador correcto sin detener reloj ni controles.
-- [ ] Revisar fondos estáticos más ricos y coherentes en estadio y mando: pelota, jugadores, arcos, marcador, reloj y avisos deben seguir siendo legibles. No confundir detalle estático con evidencia de rendimiento en TV. Repetir volumen/silenciar y OK/Nueva sala con sala abierta y jugando, comparando con la respuesta anterior.
+- [ ] Criterio visual histórico 0.2.4: fondos estáticos más ricos y coherentes en estadio y mando. Para 0.2.5, revisar la cancha simple y el mando conservado: pelota, jugadores, arcos, marcador, reloj y avisos legibles. No confundir detalle estático con rendimiento en TV. Repetir volumen/silenciar, apagado y OK/Nueva sala con sala abierta y jugando, sin dar por recuperada la respuesta.
 
 ## Registrar el entorno
 
