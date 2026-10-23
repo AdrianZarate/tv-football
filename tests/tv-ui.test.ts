@@ -182,7 +182,7 @@ test('hidden startup creates no native view or RAF; network precedes first graph
   assert.equal(h.canvases.length, 0); assert.equal(h.pendingFrames(), 0);
   h.frame(1000); assert.equal(h.canvases.length, 0);
   h.visible(false); assert.equal(h.sockets.length, 1); assert.equal(h.canvases.length, 0);
-  h.frame(); assert.equal(h.canvases.length, 2); assert.equal(h.pendingFrames(), 0);
+  h.frame(); assert.equal(h.canvases.length, 3); assert.equal(h.pendingFrames(), 0);
   h.visible(true); assert.equal(h.pendingFrames(), 0);
 });
 
@@ -332,7 +332,7 @@ test('remote Enter activates once without native click; repeats and synthesized 
   const press = h.key('keydown');
   assert.equal(h.sockets.length, 2, 'click-only TV entry does not activate Enter on its own');
   assert.equal(press.defaultPrevented, true); assert.equal(original.closed, 1);
-  h.frame(); assert.equal(h.canvases.length, 2);
+  h.frame(); assert.equal(h.canvases.length, 3);
   h.key('keydown', 'Enter', { repeat: true }); h.key('keydown');
   for (const key of ['AudioVolumeUp', 'AudioVolumeDown', 'AudioVolumeMute', 'Unidentified']) {
     assert.equal(h.key('keydown', key).defaultPrevented, false);
@@ -344,7 +344,7 @@ test('remote Enter activates once without native click; repeats and synthesized 
   h.key('keydown'); h.key('keyup'); assert.equal(h.sockets.length, 3);
   h.element('#new-room').emit('click', { detail: 1 }); assert.equal(h.sockets.length, 4);
   assert.ok(h.sockets.slice(0, -1).every(ws => ws.closed === 1));
-  assert.equal(h.canvases.length, 2, 'rooms must reuse native cached art');
+  assert.equal(h.canvases.length, 3, 'rooms must reuse native cached art');
 });
 
 test('non-Enter keys and unrelated focus pass untouched; transient overlay blur does not end a room', () => {
@@ -401,8 +401,9 @@ test('idle keeps the existing public gameStatus heartbeat without drawing or rec
 
 test('native drawing stops in idle; HUD phase writes and hidden diagnostics stop', () => {
   const h = browser(bundle); created(h.sockets[0]!); h.frame();
-  assert.equal(h.canvases.length, 2);
+  assert.equal(h.canvases.length, 3);
   assert.equal(h.canvases[0].width, 1280); assert.equal(h.canvases[0].height, 720);
+  assert.equal(h.canvases[2].width * h.canvases[2].height, 32256, 'bounded sprite atlas, no DPR growth');
   assert.equal(h.pendingFrames(), 0);
   const draws = h.drawCalls.length;
   const writes = h.phaseWrites();
@@ -445,7 +446,7 @@ for (const slot of [1, 2] as const) test(`actual goal at P${slot}'s target annou
   assert.equal(banner.hidden, true); assert.equal(banner.textContent, '');
   assert.equal(h.element('#clock').textContent, '01:59');
   assert.equal(h.intervals.length, 1, 'no extra polling timer for the banner');
-  assert.equal(h.canvases.length, 2); assert.equal(h.canvas(), '');
+  assert.equal(h.canvases.length, 3); assert.equal(h.canvas(), '');
   h.frame(118789); assert.equal(h.document.body.dataset.phase, 'playing');
   h.frame(1); assert.equal(h.document.body.dataset.phase, 'finished');
   assert.equal(h.element('#clock').textContent, '00:00');
