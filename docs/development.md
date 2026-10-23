@@ -58,16 +58,25 @@ La TV instalada no puede usar localhost de esta computadora. Probá su comportam
 ## Compilación y empaquetado
 
 - `npm run build` agrupa controles y TV en IIFE legibles con esbuild para Chrome 70/Safari 13. Ese objetivo de transformación no demuestra qué motor tiene la TV; no se incluyen adaptadores de API en ejecución.
-- Scripts, estilos y generación QR son locales, no de CDN. La entrada de TV 0.2.6 usa Canvas2D nativo y no importa Phaser ni `game/scene.ts`; la dependencia y escena histórica permanecen para compatibilidad y sus pruebas, sin cambios de manifiestos. No se generan mapas de código fuente. El HTML de controles se copia sin cambios; los encabezados HTTP del servidor aportan su CSP.
+- Scripts, estilos y generación QR son locales, no de CDN. La entrada de TV 0.2.7 usa Canvas2D nativo y no importa Phaser ni `game/scene.ts`; la dependencia y escena histórica permanecen para compatibilidad y sus pruebas, sin cambios de manifiestos. No se generan mapas de código fuente. El HTML de controles se copia sin cambios; los encabezados HTTP del servidor aportan su CSP.
 - Los recursos de TV usan rutas relativas. Su CSP generada permite solo el `/ws` configurado, scripts/estilos locales e imágenes locales/data para el QR. No se usa `unsafe-eval` ni `unsafe-inline`; el ajuste de cancha usa CSS `object-fit: contain`.
 - `PUBLIC_ORIGIN` queda compilado en la TV y su CSP. Cambiarlo requiere volver a compilar, empaquetar e instalar la app; cambiar solo variables del servidor no alcanza.
 - `npm run package:tv` requiere `dist/tv` y una CLI webOS instalada explícitamente. Consultá [webOS](webos.md). Nunca descarga ni instala herramientas automáticamente.
-- Los metadatos generados tienen versión `0.2.6`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente. Los demás campos no cambian. Build, IPK, Docker y navegador 0.2.6 quedan a cargo del padre; las compilaciones temporales de los tests no son una entrega ni autorizan instalación.
+- Los metadatos generados tienen versión `0.2.7`, título `Fútbol TV` e ID sin cambios `com.systemautomatic.tvfootball.probe`, para actualizar la app existente. Los demás campos no cambian. Build, IPK y Docker locales no equivalen a entrega; ver el registro `odd/tasks/active-play-feedback.md` para evidencia 0.2.7. Las pruebas físicas siguen separadas; las compilaciones temporales de los tests no son una entrega ni autorizan instalación.
 - Las pruebas de compilación ejecutan los scripts públicos en directorios temporales nuevos del sistema y los quitan al terminar. `node --import tsx --test tests/build.test.ts` comprueba compilación/empaquetado.
 - `node --import tsx --test tests/tv-game.test.ts` comprueba el adaptador público con tiempo virtual y conexiones reales locales de servidor/teléfonos. No ejecuta el Canvas2D real de un navegador ni demuestra compatibilidad de TV. El adaptador avanza antes de dibujar; física, marcador y tiempo siguen bajo autoridad de la TV.
 - `node --import tsx --test tests/tv-ui.test.ts tests/localization.test.ts` ejecuta las entradas reales con plataformas simuladas y comprueba arranque oculto, límites de visibilidad, aislamiento de eventos antiguos y texto español. No reemplaza la prueba física.
 
-## Comprobar el pulido local 0.2.6
+## Comprobar los ajustes locales 0.2.7
+
+- Física pública: `node --import tsx --test tests/jump-fall.test.ts tests/kick-boost.test.ts`. Comparar descenso, subida/ápice, disipación de 500 ms activos en ambos sentidos, choques, pausa y reinicios. No cambiar gravedad de pelota ni aumentar permanentemente su límite.
+- Final: `node --import tsx --test tests/tv-ui.test.ts tests/localization.test.ts`. Ganador/empate y marcador deben mantenerse hasta revancha, ocultarse al cerrar/cambiar sala y vencer al anuncio de gol al terminar el reloj. No añade temporizadores ni RAF en reposo.
+- Integración: `npm test`, `npm run typecheck`, `npm run build` y `npm run package:tv`. No instalan ni publican. Registros diferenciales ignorados en `artifacts/active-play-0.2.7/`; no son tests dependientes de Git.
+- [Protector LG](screensaver.md): bloqueado por plataforma, no corregido por esta versión; no agregar video oculto, teclas falsas ni permisos Luna.
+
+## Registro histórico de preparación del pulido 0.2.6
+
+La sección siguiente conserva el estado previo a su publicación. Posteriormente se publicó `d49d47a`, se completó el helper corregido y el usuario probó la app, valoró su apariencia y confirmó la revancha. No representa el estado vigente de 0.2.7.
 
 1. Conectá el mando a una sala de juego; **Controles** solo se habilita tras la asignación real. Abre un panel de página completa e intenta fullscreen nativo y bloqueo horizontal por gesto. iPhone Safari no admite `orientation.lock`: ante falta o rechazo, el aviso permite seguir y girar manualmente. No se simulan APIs ni se garantiza bloqueo del sistema operativo.
 2. Dentro del panel comprobá conexión, marcador y preparación (inicio, **Confirmar reanudación**, revancha). Son la misma sesión, clave y cuatro botones con captura de puntero, sin recarga, sockets extra ni nueva asignación. **Volver**, Escape y salida nativa deben liberar entradas sin dejar superposición o bloqueo propio. Barras, resize y giro no deben cambiar credenciales ni perder el modo activo.

@@ -2,7 +2,20 @@
 
 Ejecutá solo después de un despliegue HTTPS y una instalación IPK autorizados. Recogé evidencia de LG real + Android + iPhone. La prueba anterior de conectividad se validó y tuvo buena respuesta; el juego completo sigue pendiente de aceptación física. Navegadores de escritorio, pruebas sin pantalla, emuladores y compilaciones exitosas no demuestran compatibilidad de TV ni latencia aceptable. Consultá las [reglas](game.md).
 
+## 0.2.7: aceptación pendiente
+
+El usuario ya probó 0.2.6: valoración visual general positiva y revancha funcional. Reportó el protector LG durante juego y pidió estos ajustes; no implica certificación de latencia, orientación o apagado.
+
+Solo después de entrega autorizada:
+- [ ] Ambos jugadores: misma subida/altura, aterrizaje más rápido; mantener salto no produce saltos automáticos.
+- [ ] Patada claramente más rápida que empujar con el cuerpo, con potencia extra que se disipa y sin energía nueva al rebotar. Comprobar ambos sentidos, contactos y gol en contra.
+- [ ] A los 120 segundos aparece «¡FIN DEL PARTIDO!» con ganador/empate y marcador correctos; sigue visible hasta revancha/sala nueva, nunca anuncia ganador por cancelación.
+- [ ] Ambos confirman revancha; cartel desaparece y marcador/reloj se reinician. Nueva sala/segundo plano no dejan texto final antiguo.
+- [ ] Revalidar QR, volumen y controles de ambos teléfonos sin pulsaciones pegadas. **El protector sigue bloqueado:** registrar comportamiento y usar solo alternativa manual acordada; ver [limitación LG](screensaver.md).
+
 ## Pulido 0.2.6: pendiente
+
+**Registro histórico de preparación:** los párrafos siguientes conservan evidencia previa a la publicación `d49d47a`. La prueba y devolución posterior del usuario están arriba; estas notas no describen el estado actual de entrega.
 
 **T4 integración en curso; T5 aceptación física bloqueada por entrega/operación aún no autorizadas.** No hay prueba física 0.2.6. Los tres «sí» de la prueba autorizada 0.2.5 confirman solo arranque, QR/código y volumen inmediato, no apagado, partido completo ni calidad visual. Esa autorización de instalación/apertura se agotó; no habilita otra operación.
 
